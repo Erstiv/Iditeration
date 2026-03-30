@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Idideration — Dashboard{% endblock %}
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <h2>Projects</h2>
+    <a href="/projects/new" class="btn btn-primary">+ New Project</a>
+</div>
+
+{% if projects %}
+<div class="grid-3">
+    {% for project in projects %}
+    <a href="/projects/{{ project.id }}" style="text-decoration: none; color: inherit;">
+        <div class="card" style="cursor: pointer; transition: border-color 0.15s;">
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+                <h2 style="margin: 0;">{{ project.name }}</h2>
+                <span class="badge badge-{{ 'completed' if project.status == 'active' else 'pending' }}">
+                    {{ project.project_type.value.replace('_', ' ') }}
+                </span>
+            </div>
+            {% if project.description %}
+            <p class="text-sm text-dim mt-1" style="line-height: 1.4;">
+                {{ project.description[:120] }}{% if project.description|length > 120 %}...{% endif %}
+            </p>
+            {% endif %}
+            <p class="text-sm text-dim mt-1">
+                Updated {{ project.updated_at.strftime('%b %d, %Y') }}
+            </p>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card empty-state">
+    <h2>No projects yet</h2>
+    <p>Create your first project to get started with AI-powered marketing strategy.</p>
+</div>
+{% endif %}
+
+<!-- New Project Modal -->
+<div id="new-project-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; display: none;">
+    <div style="max-width: 600px; margin: 5rem auto;" class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2 style="margin: 0;">New Project</h2>
+            <button class="btn btn-outline" onclick="document.getElementById('new-project-modal').style.display='none'">&times;</button>
+        </div>
+        <form action="/projects/create" method="post">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Project Name</label>
+                    <input type="text" name="name" required placeholder="e.g., Homestead: The Series">
+                </div>
+                <div class="form-group">
+                    <label>Product Type</label>
+                    <select name="project_type" required>
+                        {% for pt in project_types %}
+                        <option value="{{ pt }}">{{ pt.replace('_', ' ').title() }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description" placeholder="Brief description of the product/project..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Raw Product Data / Notes</label>
+                <textarea name="raw_data" style="min-height: 150px;" placeholder="Paste any product information, links, notes, synopses, etc. The more context, the better the analysis."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Narralytica Show ID (optional, for media products)</label>
+                <input type="number" name="narralytica_show_id" placeholder="e.g., 1">
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('new-project-modal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Project</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

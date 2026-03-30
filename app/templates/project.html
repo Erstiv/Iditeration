@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} — Idideration{% endblock %}
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/" class="text-sm">&larr; All Projects</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1.5rem;">
+    <div>
+        <h2 style="font-size: 1.5rem;">{{ project.name }}</h2>
+        <span class="badge badge-completed">{{ project.project_type.value.replace('_', ' ') }}</span>
+        {% if project.narralytica_show_id %}
+        <span class="badge badge-running">Narralytica #{{ project.narralytica_show_id }}</span>
+        {% endif %}
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+        <button class="btn btn-outline" onclick="document.getElementById('edit-modal').style.display='block'">Edit</button>
+        <form action="/projects/{{ project.id }}/run" method="post" style="display: inline;">
+            <button type="submit" class="btn btn-primary">Run Full Analysis</button>
+        </form>
+    </div>
+</div>
+
+{% if project.description %}
+<div class="card mb-2">
+    <h3>Description</h3>
+    <p>{{ project.description }}</p>
+</div>
+{% endif %}
+
+<div class="grid-2">
+    <!-- Left Column: Runs & Outputs -->
+    <div>
+        <div class="card">
+            <h2>Analysis Runs</h2>
+            {% if crew_runs %}
+            <table>
+                <thead>
+                    <tr><th>Run</th><th>Status</th><th>Cost</th><th>Date</th><th></th></tr>
+                </thead>
+                <tbody>
+                {% for run in crew_runs %}
+                <tr>
+                    <td>#{{ run.id }}</td>
+                    <td><span class="badge badge-{{ run.status.value }}">{{ run.status.value }}</span></td>
+                    <td class="text-sm">${{ "%.4f"|format(run.agent_runs|sum(attribute='cost_usd')) }}</td>
+                    <td class="text-sm text-dim">{{ run.created_at.strftime('%b %d %H:%M') }}</td>
+                    <td>
+                        <a href="/projects/{{ project.id }}/runs/{{ run.id }}" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">View</a>
+                        {% if run.status.value == 'completed' %}
+                        <form action="/projects/{{ project.id }}/generate-docx" method="post" style="display: inline;">
+                            <input type="hidden" name="run_id" value="{{ run.id }}">
+                            <button type="submit" class="btn btn-success" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">DOCX</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-dim text-sm">No runs yet. Click "Run Full Analysis" to start.</p>
+            {% endif %}
+        </div>
+
+        <!-- Selective Run -->
+        <div class="card">
+            <h2>Selective Run</h2>
+            <p class="text-sm text-dim mb-1">Choose specific agents to run.</p>
+            <form action="/projects/{{ project.id }}/run" method="post">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem;">
+                    {% for agent in agent_names %}
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
+                        <input type="checkbox" name="agents" value="{{ agent }}">
+                        {{ agent.replace('_', ' ').title() }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-outline">Run Selected</button>
+            </form>
+        </div>
+
+        <!-- Output Documents -->
+        <div class="card">
+            <h2>Output Documents</h2>
+            {% if output_docs %}
+            <table>
+                <thead><tr><th>Document</th><th>Type</th><th>Date</th><th></th></tr></thead>
+                <tbody>
+                {% for doc in output_docs %}
+                <tr>
+                    <td class="text-sm">{{ doc.file_name }}</td>
+                    <td><span class="badge badge-completed">{{ doc.doc_type }}</span></td>
+                    <td class="text-sm text-dim">{{ doc.generated_at.strftime('%b %d %H:%M') }}</td>
+                    <td><a href="/projects/{{ project.id }}/download/{{ doc.id }}" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Download</a></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-dim text-sm">Complete an analysis run, then generate a DOCX.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Right Column: Knowledge Base & Stakeholders -->
+    <div>
+        <!-- Product Bible -->
+        <div class="card">
+            <h2>Product Bible <span class="text-dim text-sm">({{ product_entries|length }} entries)</span></h2>
+            {% if product_entries %}
+            {% set ns = namespace(current_cat='') %}
+            {% for entry in product_entries|sort(attribute='category.value') %}
+                {% if entry.category.value != ns.current_cat %}
+                    {% set ns.current_cat = entry.category.value %}
+                    <h3 class="mt-1" style="border-bottom: 1px solid var(--border); padding-bottom: 0.25rem;">
+                        {{ entry.category.value.replace('_', ' ').title() }}
+                    </h3>
+                {% endif %}
+                <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(42,42,69,0.3);">
+                    <strong class="text-sm">{{ entry.title }}</strong>
+                    <span class="text-dim text-sm" style="margin-left: 0.5rem;">[{{ entry.source }}]</span>
+                    <p class="text-sm text-dim" style="margin-top: 0.15rem;">{{ entry.content[:150] }}{% if entry.content|length > 150 %}...{% endif %}</p>
+                </div>
+            {% endfor %}
+            {% else %}
+            <p class="text-dim text-sm">Entries will populate as agents run.</p>
+            {% endif %}
+
+            <details class="mt-2">
+                <summary class="text-sm" style="cursor: pointer; color: var(--accent);">+ Add Entry Manually</summary>
+                <form action="/projects/{{ project.id }}/bible/add" method="post" class="mt-1">
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select name="category">
+                            <option value="directives" style="color: var(--red);">⚠ Directives (Rules/Constraints)</option>
+                            <option value="product_overview">Product Overview</option>
+                            <option value="stakeholder_input">Stakeholder Input</option>
+                            <option value="research_findings">Research Findings</option>
+                            <option value="audience_segments">Audience Segments</option>
+                            <option value="competitive_data">Competitive Data</option>
+                            <option value="social_data">Social Data</option>
+                            <option value="strategy">Strategy</option>
+                            <option value="creative">Creative</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" name="title" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Content</label>
+                        <textarea name="content" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-outline">Add Entry</button>
+                </form>
+            </details>
+        </div>
+
+        <!-- Stakeholder Questions -->
+        <div class="card">
+            <h2>Stakeholder Questions <span class="text-dim text-sm">({{ stakeholder_questions|length }})</span></h2>
+            {% if stakeholder_questions %}
+            {% for sq in stakeholder_questions %}
+            <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(42,42,69,0.3);">
+                <p class="text-sm"><strong>{{ sq.question }}</strong></p>
+                <p class="text-sm text-dim">Role: {{ sq.target_role }} {% if sq.purpose %}| {{ sq.purpose[:80] }}{% endif %}</p>
+                {% if sq.answer %}
+                <p class="text-sm mt-1" style="background: var(--bg); padding: 0.5rem; border-radius: 4px;">
+                    <strong>{{ sq.answered_by or 'Stakeholder' }}:</strong> {{ sq.answer }}
+                </p>
+                {% else %}
+                <form action="/projects/{{ project.id }}/stakeholder/answer" method="post" class="mt-1">
+                    <input type="hidden" name="question_id" value="{{ sq.id }}">
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" name="answered_by" placeholder="Name" style="width: 120px;">
+                        <input type="text" name="answer" placeholder="Answer..." style="flex: 1;">
+                        <button type="submit" class="btn btn-outline" style="padding: 0.25rem 0.5rem;">Save</button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="text-dim text-sm">Run the Stakeholder Agent to generate interview questions.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100;">
+    <div style="max-width: 600px; margin: 5rem auto;" class="card">
+        <h2>Edit Project</h2>
+        <form action="/projects/{{ project.id }}/update" method="post">
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" name="name" value="{{ project.name }}">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea name="description">{{ project.description or '' }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Raw Product Data</label>
+                <textarea name="raw_data" style="min-height: 200px;">{{ project.raw_data or '' }}</textarea>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('edit-modal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

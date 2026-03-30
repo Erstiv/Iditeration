@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+{% block title %}Idideration — New Project{% endblock %}
+{% block content %}
+<style>
+    .intake-form {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .intake-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+    .intake-header h2 { margin: 0; }
+
+    .step {
+        display: none;
+    }
+    .step.active {
+        display: block;
+    }
+
+    .step-indicator {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 2rem;
+    }
+    .step-dot {
+        flex: 1;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--border);
+        transition: background 0.3s;
+    }
+    .step-dot.done { background: var(--accent); }
+    .step-dot.current { background: var(--accent); opacity: 0.6; }
+
+    .step-title {
+        font-size: 0.8rem;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+    }
+    .step-heading {
+        font-size: 1.3rem;
+        margin-bottom: 0.25rem;
+    }
+    .step-desc {
+        color: var(--text-dim);
+        font-size: 0.85rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .nav-buttons {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .checkbox-group {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+        cursor: pointer;
+        transition: border-color 0.15s;
+    }
+    .checkbox-group:hover {
+        border-color: var(--accent);
+    }
+    .checkbox-group label {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+        color: var(--text);
+    }
+    .checkbox-group input[type="checkbox"] {
+        width: auto;
+        margin-top: 0.15rem;
+        accent-color: var(--accent);
+    }
+    .checkbox-group .cb-desc {
+        font-size: 0.8rem;
+        color: var(--text-dim);
+        margin-top: 0.25rem;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+        border: 2px dashed var(--border);
+        border-radius: 12px;
+        padding: 2rem 1.5rem;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
+        margin-bottom: 1.5rem;
+        position: relative;
+    }
+    .drop-zone:hover,
+    .drop-zone.dragover {
+        border-color: var(--accent);
+        background: rgba(99, 102, 241, 0.05);
+    }
+    .drop-zone.processing {
+        border-color: var(--accent);
+        opacity: 0.85;
+        pointer-events: none;
+    }
+    .drop-zone.success {
+        border-color: #22c55e;
+        background: rgba(34, 197, 94, 0.06);
+    }
+    .drop-zone-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+        opacity: 0.6;
+    }
+    .drop-zone-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 0.25rem;
+    }
+    .drop-zone-sub {
+        font-size: 0.8rem;
+        color: var(--text-dim);
+    }
+    .drop-zone .spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        margin-right: 0.5rem;
+        vertical-align: middle;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    @keyframes field-flash {
+        0% { background: rgba(99, 102, 241, 0.15); }
+        100% { background: transparent; }
+    }
+    .field-populated {
+        animation: field-flash 1.2s ease-out;
+    }
+</style>
+
+<div class="intake-form">
+    <div class="intake-header">
+        <h2>New Project</h2>
+        <a href="/" class="btn btn-outline">Cancel</a>
+    </div>
+
+    <div class="step-indicator">
+        <div class="step-dot current" id="dot-1"></div>
+        <div class="step-dot" id="dot-2"></div>
+        <div class="step-dot" id="dot-3"></div>
+        <div class="step-dot" id="dot-4"></div>
+    </div>
+
+    <form id="intake-form" action="/projects/create" method="post" novalidate>
+        <!-- Step 1: Basic Info -->
+        <div class="step active" id="step-1">
+            <div class="card">
+                <div class="step-title">Step 1 of 4</div>
+                <div class="step-heading">Basic Info</div>
+                <p class="step-desc">Tell us about the product. Only the name is required — we can research the rest.</p>
+
+                <div class="form-group">
+                    <label>Product Name *</label>
+                    <input type="text" name="name" id="field-name" required placeholder="e.g., Homestead: The Series">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Product Type</label>
+                        <select name="project_type" id="field-type">
+                            {% for pt in project_types %}
+                            <option value="{{ pt }}">{{ pt.replace('_', ' ').title() }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>URL (website, IMDB, etc.)</label>
+                        <input type="url" name="url" placeholder="https://...">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>One-line Description</label>
+                    <input type="text" name="description" placeholder="A brief summary in one sentence">
+                </div>
+            </div>
+            <div class="nav-buttons">
+                <div></div>
+                <button type="button" class="btn btn-primary" onclick="goToStep(2)">Next: What You Know</button>
+            </div>
+        </div>
+
+        <!-- Step 2: What You Know -->
+        <div class="step" id="step-2">
+            <div class="card">
+                <div class="step-title">Step 2 of 4</div>
+                <div class="step-heading">What You Know</div>
+                <p class="step-desc">Share anything you already know. All fields are optional — the Research Agent can fill in the gaps.</p>
+
+                <div class="drop-zone" id="drop-zone">
+                    <input type="file" id="file-input" multiple accept=".pdf,.docx,.doc,.txt" style="display:none;">
+                    <div id="dz-idle">
+                        <div class="drop-zone-icon">&#128196;</div>
+                        <div class="drop-zone-title">Drop PDF, DOCX, or TXT files here</div>
+                        <div class="drop-zone-sub">AI will parse your notes into the fields below &mdash; or click to browse</div>
+                    </div>
+                    <div id="dz-processing" style="display:none;">
+                        <span class="spinner"></span>
+                        <span class="drop-zone-title">Parsing with AI&hellip;</span>
+                    </div>
+                    <div id="dz-success" style="display:none;">
+                        <div class="drop-zone-icon" style="opacity:1;">&#10003;</div>
+                        <div class="drop-zone-title" style="color:#22c55e;">Fields populated from your files</div>
+                    </div>
+                    <div id="dz-error" style="display:none;">
+                        <div class="drop-zone-title" style="color:var(--red);">Parsing failed — raw text added to notes</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Elevator Pitch</label>
+                    <textarea name="elevator_pitch" placeholder="In 2-3 sentences, what is this product and why should anyone care?"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Key People Involved</label>
+                    <input type="text" name="key_people" placeholder="Creator, director, cast, founders, etc.">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Target Audience (your best guess)</label>
+                        <input type="text" name="target_audience" placeholder="e.g., faith-based families, tech enthusiasts">
+                    </div>
+                    <div class="form-group">
+                        <label>Known Competitors</label>
+                        <input type="text" name="known_competitors" placeholder="e.g., The Chosen, Yellowstone">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Existing Social Accounts</label>
+                        <input type="text" name="social_accounts" placeholder="@handles or URLs, comma-separated">
+                    </div>
+                    <div class="form-group">
+                        <label>Distribution Platform / Channel</label>
+                        <input type="text" name="distribution" placeholder="e.g., Angel Studios, Netflix, Amazon">
+                    </div>
+                </div>
+            </div>
+            <div class="nav-buttons">
+                <button type="button" class="btn btn-outline" onclick="goToStep(1)">Back</button>
+                <button type="button" class="btn btn-primary" onclick="goToStep(3)">Next: Assets & Context</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Assets & Context -->
+        <div class="step" id="step-3">
+            <div class="card">
+                <div class="step-title">Step 3 of 4</div>
+                <div class="step-heading">Assets & Context</div>
+                <p class="step-desc">Paste any raw data, notes, synopses, or research you already have. The more context, the better.</p>
+
+                <div class="form-group">
+                    <label>Raw Notes / Data</label>
+                    <textarea name="raw_data" style="min-height: 200px;" placeholder="Paste anything: synopses, press releases, links, market research, competitor notes, internal strategy docs, etc."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Narralytica Show ID (for media products)</label>
+                    <input type="number" name="narralytica_show_id" placeholder="e.g., 1">
+                </div>
+            </div>
+            <div class="nav-buttons">
+                <button type="button" class="btn btn-outline" onclick="goToStep(2)">Back</button>
+                <button type="button" class="btn btn-primary" onclick="goToStep(4)">Next: Research Options</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Research Options -->
+        <div class="step" id="step-4">
+            <div class="card">
+                <div class="step-title">Step 4 of 4</div>
+                <div class="step-heading">Research Options</div>
+                <p class="step-desc">Choose what to run automatically after creating the project.</p>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" name="auto_research" value="1" checked>
+                        <div>
+                            <strong>Auto-research this product</strong>
+                            <div class="cb-desc">Runs the Research Agent (Agent 0) which uses Google Search to find everything about this product: marketing presence, competitors, audience signals, reviews, and more.</div>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" name="generate_questions" value="1">
+                        <div>
+                            <strong>Generate stakeholder questions</strong>
+                            <div class="cb-desc">Runs the Stakeholder Agent to generate targeted questions for the product owner based on research gaps.</div>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" name="full_pipeline" value="1">
+                        <div>
+                            <strong>Run full analysis after research</strong>
+                            <div class="cb-desc">After the Research Agent finishes, automatically runs all 7 strategy agents (Intake, Behavioral, Psychometrics, Competitive Intelligence, Social, Chief Strategist, Creative Director). Takes ~5-10 minutes.</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            <div class="nav-buttons">
+                <button type="button" class="btn btn-outline" onclick="goToStep(3)">Back</button>
+                <button type="submit" class="btn btn-primary" id="submit-btn">Create Project</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    let currentStep = 1;
+
+    function goToStep(step) {
+        // Validate step 1 before advancing
+        if (currentStep === 1 && step > 1) {
+            const name = document.getElementById('field-name');
+            if (!name.value.trim()) {
+                name.focus();
+                name.style.borderColor = 'var(--red)';
+                setTimeout(() => name.style.borderColor = '', 2000);
+                return;
+            }
+        }
+
+        document.getElementById('step-' + currentStep).classList.remove('active');
+        document.getElementById('step-' + step).classList.add('active');
+
+        // Update dots
+        for (let i = 1; i <= 4; i++) {
+            const dot = document.getElementById('dot-' + i);
+            dot.className = 'step-dot';
+            if (i < step) dot.classList.add('done');
+            if (i === step) dot.classList.add('current');
+        }
+
+        currentStep = step;
+        window.scrollTo(0, 0);
+    }
+
+    // Update submit button text based on checkboxes
+    function updateSubmitText() {
+        const research = document.querySelector('[name="auto_research"]').checked;
+        const full = document.querySelector('[name="full_pipeline"]').checked;
+        const btn = document.getElementById('submit-btn');
+
+        if (full) {
+            btn.textContent = 'Create & Run Full Pipeline';
+        } else if (research) {
+            btn.textContent = 'Create & Start Research';
+        } else {
+            btn.textContent = 'Create Project';
+        }
+    }
+
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', updateSubmitText);
+    });
+    updateSubmitText();
+
+    // ─── Form Submit Validation ─────────────────────────────
+    document.getElementById('intake-form').addEventListener('submit', function(e) {
+        const name = document.getElementById('field-name');
+        if (!name.value.trim()) {
+            e.preventDefault();
+            goToStep(1);
+            name.focus();
+            name.style.borderColor = 'var(--red)';
+            setTimeout(() => name.style.borderColor = '', 2000);
+            return;
+        }
+    });
+
+    // ─── Drop Zone Logic ─────────────────────────────────────
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const dzIdle = document.getElementById('dz-idle');
+    const dzProcessing = document.getElementById('dz-processing');
+    const dzSuccess = document.getElementById('dz-success');
+    const dzError = document.getElementById('dz-error');
+
+    // Click to browse
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) handleFiles(fileInput.files);
+    });
+
+    // Drag events
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+    });
+
+    function setDzState(state) {
+        dzIdle.style.display = state === 'idle' ? '' : 'none';
+        dzProcessing.style.display = state === 'processing' ? '' : 'none';
+        dzSuccess.style.display = state === 'success' ? '' : 'none';
+        dzError.style.display = state === 'error' ? '' : 'none';
+        dropZone.classList.remove('processing', 'success');
+        if (state === 'processing') dropZone.classList.add('processing');
+        if (state === 'success') dropZone.classList.add('success');
+    }
+
+    async function handleFiles(fileList) {
+        setDzState('processing');
+        const formData = new FormData();
+        for (const file of fileList) {
+            formData.append('files', file);
+        }
+
+        try {
+            const resp = await fetch('/api/parse-files', { method: 'POST', body: formData });
+            if (!resp.ok) throw new Error('Upload failed: ' + resp.status);
+            const data = await resp.json();
+
+            if (data.error && !data.raw_text) {
+                setDzState('error');
+                return;
+            }
+
+            // Map of JSON keys to form field names
+            const fieldMap = {
+                elevator_pitch: 'elevator_pitch',
+                key_people: 'key_people',
+                target_audience: 'target_audience',
+                known_competitors: 'known_competitors',
+                social_accounts: 'social_accounts',
+                distribution: 'distribution',
+            };
+
+            let anyFilled = false;
+            for (const [key, formName] of Object.entries(fieldMap)) {
+                const val = data[key];
+                if (val && val.trim()) {
+                    const el = document.querySelector(`[name="${formName}"]`);
+                    if (el) {
+                        el.value = val;
+                        el.classList.add('field-populated');
+                        setTimeout(() => el.classList.remove('field-populated'), 1500);
+                        anyFilled = true;
+                    }
+                }
+            }
+
+            // Append raw text to raw_data textarea in Step 3
+            const rawTextarea = document.querySelector('[name="raw_data"]');
+            const rawContent = data.raw_text || data.raw_notes || '';
+            if (rawTextarea && rawContent) {
+                const existing = rawTextarea.value.trim();
+                rawTextarea.value = existing
+                    ? existing + '\n\n--- Uploaded File Content ---\n' + rawContent
+                    : rawContent;
+            }
+
+            setDzState(anyFilled ? 'success' : (rawContent ? 'success' : 'error'));
+        } catch (err) {
+            console.error('File parse error:', err);
+            setDzState('error');
+        }
+
+        // Reset file input so same files can be re-selected
+        fileInput.value = '';
+    }
+</script>
+{% endblock %}

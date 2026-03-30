@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Run #{{ run_status.id }} — {{ project.name }}{% endblock %}
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/projects/{{ project.id }}" class="text-sm">&larr; {{ project.name }}</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <div>
+        <h2>Run #{{ run_status.id }}</h2>
+        <span class="badge badge-{{ run_status.status }}">{{ run_status.status }}</span>
+        <span class="text-sm text-dim" style="margin-left: 0.5rem;">
+            Total: ${{ "%.4f"|format(run_status.total_cost_usd) }} | {{ "{:,}".format(run_status.total_tokens) }} tokens
+        </span>
+    </div>
+    {% if run_status.status == 'running' %}
+    <div class="text-sm text-dim" id="auto-refresh"
+         hx-get="/api/projects/{{ project.id }}/runs/{{ run_status.id }}/status"
+         hx-trigger="every 5s"
+         hx-swap="none">
+        Auto-refreshing...
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Agent Pipeline</h2>
+    <div style="margin-top: 1rem;">
+        {% for agent in run_status.agents %}
+        <div class="agent-status" style="padding: 0.75rem; border-bottom: 1px solid var(--border); {% if agent.status == 'running' %}background: rgba(59,130,246,0.05);{% endif %}">
+            <div class="agent-dot dot-{{ agent.status }}"></div>
+            <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong class="text-sm">{{ agent.sequence + 1 }}. {{ agent.name.replace('_', ' ').title() }}</strong>
+                        {% if agent.model %}
+                        <span class="text-dim text-sm" style="margin-left: 0.5rem;">
+                            {{ agent.model }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        {% if agent.tokens > 0 %}
+                        <span class="text-sm text-dim">{{ "{:,}".format(agent.tokens) }} tok</span>
+                        {% endif %}
+                        {% if agent.cost_usd > 0 %}
+                        <span class="text-sm text-dim">${{ "%.4f"|format(agent.cost_usd) }}</span>
+                        {% endif %}
+                        <span class="badge badge-{{ agent.status }}">{{ agent.status }}</span>
+                    </div>
+                </div>
+                {% if agent.error %}
+                <p class="text-sm" style="color: var(--red); margin-top: 0.25rem;">{{ agent.error[:200] }}</p>
+                {% endif %}
+                {% if agent.started_at and agent.completed_at %}
+                <p class="text-sm text-dim" style="margin-top: 0.15rem;">
+                    {{ agent.started_at[:19] }} &rarr; {{ agent.completed_at[:19] }}
+                </p>
+                {% endif %}
+                {% if agent.status == 'completed' or agent.status == 'failed' %}
+                <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; align-items: center;">
+                    {% if agent.status == 'completed' %}
+                    <button class="btn btn-outline btn-sm"
+                            hx-get="/api/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/output"
+                            hx-target="#output-{{ agent.name }}"
+                            hx-swap="innerHTML"
+                            onclick="this.style.display='none'">
+                        View Output
+                    </button>
+                    <form action="/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/export-docx"
+                          method="post" style="display:inline;margin:0;">
+                        <button type="submit" class="btn btn-outline btn-sm">Export DOCX</button>
+                    </form>
+                    {% endif %}
+                    <form action="/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/rerun"
+                          method="post" style="display:inline;margin:0;">
+                        <button type="submit" class="btn btn-outline btn-sm"
+                                onclick="return confirm('Rerun {{ agent.name.replace('_', ' ').title() }}? This will replace its current output. Downstream agents will NOT be re-run.')">
+                            Rerun
+                        </button>
+                    </form>
+                </div>
+                <div id="output-{{ agent.name }}"></div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if run_status.status == 'completed' %}
+<div class="card mt-2">
+    <h2>Generate Output</h2>
+    <form action="/projects/{{ project.id }}/generate-docx" method="post" style="display: inline;">
+        <input type="hidden" name="run_id" value="{{ run_status.id }}">
+        <button type="submit" class="btn btn-success">Generate Marketing Plan (DOCX)</button>
+    </form>
+</div>
+{% endif %}
+
+{% if run_status.status == 'running' %}
+<script>
+    // Auto-reload page every 5 seconds while running
+    setTimeout(function() { location.reload(); }, 5000);
+</script>
+{% endif %}
+{% endblock %}
