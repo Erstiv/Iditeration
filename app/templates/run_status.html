@@ -32,11 +32,11 @@
             <div style="flex: 1;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <strong class="text-sm">{{ agent.sequence + 1 }}. {{ agent.name.replace('_', ' ').title() }}</strong>
+                        {% set char = AGENT_CHARACTERS.get(agent.name, {}) %}
+                        <strong class="text-sm">{{ agent.sequence + 1 }}. {{ char.name or agent.name.replace('_', ' ').title() }}</strong>
+                        <span class="text-dim text-sm" style="margin-left: 0.4rem;">· {{ char.catalog or '' }}</span>
                         {% if agent.model %}
-                        <span class="text-dim text-sm" style="margin-left: 0.5rem;">
-                            {{ agent.model }}
-                        </span>
+                        <span class="text-dim text-sm" style="margin-left: 0.5rem;">({{ agent.model }})</span>
                         {% endif %}
                     </div>
                     <div style="display: flex; align-items: center; gap: 1rem;">
@@ -79,8 +79,9 @@
                     {% endif %}
                     <form action="/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/rerun"
                           method="post" style="display:inline;margin:0;">
+                        {% set char = AGENT_CHARACTERS.get(agent.name, {}) %}
                         <button type="submit" class="btn btn-outline btn-sm"
-                                onclick="return confirm('Rerun {{ agent.name.replace('_', ' ').title() }}? This will replace its current output. Downstream agents will NOT be re-run.')">
+                                onclick="return confirm('Rerun {{ char.name or agent.name.replace(\'_\', \' \') }}? This will replace their current output. Downstream agents will NOT be re-run.')">
                             Rerun
                         </button>
                     </form>
@@ -107,7 +108,8 @@
 <div class="card mt-2">
     <h2>Pipeline Incomplete</h2>
     <p class="text-sm text-dim" style="margin-bottom: 0.75rem;">
-        {{ pending_agents | length }} agent(s) still pending: {{ pending_agents | map(attribute='name') | map('replace', '_', ' ') | join(', ') | title }}
+        {{ pending_agents | length }} agent(s) still pending:
+        {% for a in pending_agents %}{{ AGENT_CHARACTERS.get(a.name, {}).get('name', a.name.replace('_',' ').title()) }}{% if not loop.last %}, {% endif %}{% endfor %}
     </p>
     <form action="/projects/{{ project.id }}/runs/{{ run_status.id }}/continue" method="post" style="display: inline;">
         <button type="submit" class="btn btn-primary">Continue Pipeline</button>

@@ -25,6 +25,58 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# ─── Library at Mount Char character map ────────────────────
+# Each agent is named after a character from Scott Hawkins' novel.
+# Displayed throughout the UI in place of raw agent names.
+AGENT_CHARACTERS = {
+    "research_agent": {
+        "name": "Emily",
+        "catalog": "Finder of secrets and lost things",
+        "role": "Research Agent",
+    },
+    "intake_analyst": {
+        "name": "Jennifer & Michael",
+        "catalog": "Medicine & Ambassador to Animals",
+        "role": "Intake Analyst",
+    },
+    "behavioral_scientist": {
+        "name": "Margaret",
+        "catalog": "Death and the exploration thereof",
+        "role": "Behavioral Scientist",
+    },
+    "psychometrics_expert": {
+        "name": "Carolyn",
+        "catalog": "Languages — master manipulator",
+        "role": "Psychometrics Expert",
+    },
+    "competitive_intelligence": {
+        "name": "David",
+        "catalog": "Killing, war, and martial arts",
+        "role": "Competitive Intelligence",
+    },
+    "social_strategist": {
+        "name": "Lisa Garza",
+        "catalog": "Persuasion and mind control",
+        "role": "Social Strategist",
+    },
+    "chief_strategist": {
+        "name": "Father",
+        "catalog": "Ablakha — omniscient overseer",
+        "role": "Chief Strategist",
+    },
+    "creative_director": {
+        "name": "Rachel",
+        "catalog": "Ghost children see possible futures",
+        "role": "Creative Director",
+    },
+    "stakeholder_agent": {
+        "name": "Alicia",
+        "catalog": "Time travel — the actual future",
+        "role": "Stakeholder Agent",
+    },
+}
+
+
 # ─── Agent interaction helpers ──────────────────────────────
 
 AGENT_DEFAULT_BIBLE_CATEGORY = {
@@ -56,6 +108,7 @@ def _estimate_note_cost(model: str, input_tokens: int, output_tokens: int) -> fl
         return round((input_tokens / 1_000_000) * 1.25 + (output_tokens / 1_000_000) * 10.00, 4)
     return round((input_tokens / 1_000_000) * 0.15 + (output_tokens / 1_000_000) * 0.60, 4)
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
+templates.env.globals["AGENT_CHARACTERS"] = AGENT_CHARACTERS
 
 
 # ─── Project CRUD ───────────────────────────────────────────

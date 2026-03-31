@@ -74,9 +74,10 @@
             <form action="/projects/{{ project.id }}/run" method="post">
                 <div style="display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-bottom: 1rem;">
                     {% for agent in agent_names %}
-                    <label style="display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer; white-space: nowrap;">
+                    {% set char = AGENT_CHARACTERS.get(agent, {}) %}
+                    <label style="display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer; white-space: nowrap;" title="{{ char.catalog or '' }}">
                         <input type="checkbox" name="agents" value="{{ agent }}">
-                        {{ agent.replace('_', ' ').title() }}
+                        {{ char.name or agent.replace('_', ' ').title() }}
                     </label>
                     {% endfor %}
                 </div>
