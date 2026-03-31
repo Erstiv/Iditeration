@@ -13,7 +13,7 @@ from google.genai import types
 from sqlalchemy.orm import Session
 
 from app.config import GEMINI_API_KEY, AGENT_TEMPERATURE, AGENT_MAX_TOKENS
-from app.models import ResearchBrief, RunStatus, Project
+from app.models import ResearchBrief, RunStatus, Project, BibleEntry, BibleScope, CrewRun, AgentRun
 
 logger = logging.getLogger("idideration.research_brief_agent")
 
@@ -38,6 +38,167 @@ _SYNTHESIS_SYSTEM = (
 )
 
 
+def _build_project_context(db: Session, project_id: int, project: Project | None) -> str:
+    """Build rich project context: basic info + Product Bible + latest agent outputs."""
+    if not project:
+        return ""
+
+    sections = []
+    sections.append("=== PROJECT CONTEXT ===")
+    sections.append(
+        f"This research question is being asked in the context of a marketing project.\n"
+        f"Product: {project.name}\n"
+        f"Type: {project.project_type.value.replace('_', ' ')}"
+    )
+    if project.description:
+        sections.append(f"Description: {project.description}")
+    if project.raw_data:
+        sections.append(f"Additional notes: {project.raw_data[:1000]}")
+
+    # ── Product Bible entries ───────────────────────────────────────────────
+    bible_entries = db.query(BibleEntry).filter(
+        BibleEntry.project_id == project_id,
+        BibleEntry.scope == BibleScope.PROJECT,
+        BibleEntry.is_active == True,
+    ).order_by(BibleEntry.category).all()
+
+    if bible_entries:
+        sections.append("\n=== PRODUCT BIBLE (what we know about this project) ===")
+        current_cat = None
+        for entry in bible_entries:
+            cat = entry.category.value.replace("_", " ").title()
+            if cat != current_cat:
+                current_cat = cat
+                sections.append(f"\n[{cat}]")
+            sections.append(f"• {entry.title}: {entry.content[:400]}")
+
+    # ── Latest completed agent outputs ─────────────────────────────────────
+    latest_run = (
+        db.query(CrewRun)
+        .filter(CrewRun.project_id == project_id)
+        .order_by(CrewRun.created_at.desc())
+        .first()
+    )
+
+    AGENT_LABELS = {
+        "research_agent":           "Research Findings",
+        "intake_analyst":           "Product Assessment",
+        "behavioral_scientist":     "Behavioral Analysis",
+        "psychometrics_expert":     "Psychographic Profile",
+        "competitive_intelligence": "Competitive Landscape",
+        "social_strategist":        "Social Media Strategy",
+        "chief_strategist":         "Marketing Strategy",
+        "creative_director":        "Creative Direction",
+        "stakeholder_agent":        "Stakeholder Questions",
+    }
+
+    if latest_run:
+        completed_runs = [
+            ar for ar in latest_run.agent_runs
+            if ar.status.value == "completed" and ar.output_json
+        ]
+        if completed_runs:
+            sections.append("\n=== AGENT PIPELINE OUTPUTS (latest run) ===")
+            for ar in completed_runs:
+                label = AGENT_LABELS.get(ar.agent_name.value, ar.agent_name.value.replace("_", " ").title())
+                # Extract a concise summary from the JSON rather than dumping everything
+                summary = _summarise_agent_output(ar.agent_name.value, ar.output_json)
+                if summary:
+                    sections.append(f"\n[{label}]\n{summary}")
+
+    sections.append(
+        "\n=== HOW TO USE THIS CONTEXT ===\n"
+        "Use the project context above to make your research directly applicable. "
+        "When discussing marketing implications, reference this specific product, its audience, "
+        "its competitive landscape, and its strategy where relevant. "
+        "Don't just give generic advice — connect the research findings to THIS project."
+    )
+
+    return "\n\n".join(sections)
+
+
+def _summarise_agent_output(agent_name: str, output: dict) -> str:
+    """Extract a concise, readable summary from an agent's JSON output."""
+    if not isinstance(output, dict):
+        return ""
+
+    lines = []
+
+    if agent_name == "research_agent":
+        pb = output.get("product_brief", {})
+        if isinstance(pb, dict):
+            if pb.get("description"):
+                lines.append(f"Product: {pb['description'][:300]}")
+            if pb.get("release_timeline"):
+                lines.append(f"Timeline: {pb['release_timeline']}")
+        audience = output.get("audience_signals", {})
+        if isinstance(audience, dict) and audience.get("primary_audiences"):
+            aud = audience["primary_audiences"]
+            lines.append(f"Audiences: {', '.join(str(a) for a in aud[:4])}")
+
+    elif agent_name == "intake_analyst":
+        for key in ["positioning_statement", "core_value_proposition", "unique_selling_points"]:
+            val = output.get(key)
+            if val:
+                lines.append(f"{key.replace('_', ' ').title()}: {str(val)[:300]}")
+
+    elif agent_name == "behavioral_scientist":
+        for key in ["primary_motivation", "core_behavioral_insights", "engagement_triggers"]:
+            val = output.get(key)
+            if isinstance(val, list):
+                lines.append(f"{key.replace('_', ' ').title()}: {', '.join(str(v) for v in val[:3])}")
+            elif val:
+                lines.append(f"{key.replace('_', ' ').title()}: {str(val)[:300]}")
+
+    elif agent_name == "psychometrics_expert":
+        for key in ["primary_psychographic_segments", "core_values", "identity_motivators"]:
+            val = output.get(key)
+            if isinstance(val, list):
+                lines.append(f"{key.replace('_', ' ').title()}: {', '.join(str(v) for v in val[:4])}")
+            elif val:
+                lines.append(f"{key.replace('_', ' ').title()}: {str(val)[:300]}")
+
+    elif agent_name == "competitive_intelligence":
+        for key in ["competitive_gaps", "differentiation_opportunities", "positioning_recommendation"]:
+            val = output.get(key)
+            if isinstance(val, list):
+                lines.append(f"{key.replace('_', ' ').title()}: {', '.join(str(v) for v in val[:3])}")
+            elif val:
+                lines.append(f"{key.replace('_', ' ').title()}: {str(val)[:300]}")
+
+    elif agent_name == "social_strategist":
+        for key in ["primary_platform", "content_pillars", "recommended_posting_frequency"]:
+            val = output.get(key)
+            if isinstance(val, list):
+                lines.append(f"{key.replace('_', ' ').title()}: {', '.join(str(v) for v in val[:4])}")
+            elif val:
+                lines.append(f"{key.replace('_', ' ').title()}: {str(val)[:200]}")
+
+    elif agent_name == "chief_strategist":
+        for key in ["strategic_recommendation", "primary_campaign_theme", "key_messages"]:
+            val = output.get(key)
+            if isinstance(val, list):
+                lines.append(f"{key.replace('_', ' ').title()}: {', '.join(str(v) for v in val[:3])}")
+            elif val:
+                lines.append(f"{key.replace('_', ' ').title()}: {str(val)[:400]}")
+
+    elif agent_name == "creative_director":
+        for key in ["campaign_concept", "tone_of_voice", "visual_direction"]:
+            val = output.get(key)
+            if val:
+                lines.append(f"{key.replace('_', ' ').title()}: {str(val)[:300]}")
+
+    # Fallback: grab any top-level string values
+    if not lines:
+        for k, v in list(output.items())[:6]:
+            if isinstance(v, str) and len(v) > 20:
+                lines.append(f"{k.replace('_', ' ').title()}: {v[:200]}")
+            elif isinstance(v, list) and v and isinstance(v[0], str):
+                lines.append(f"{k.replace('_', ' ').title()}: {', '.join(v[:3])}")
+
+    return "\n".join(lines[:8])
+
+
 def run_research_brief(db: Session, brief_id: int) -> None:
     """Execute a research brief in the background. Updates the ResearchBrief record."""
     brief = db.query(ResearchBrief).filter(ResearchBrief.id == brief_id).first()
@@ -55,18 +216,7 @@ def run_research_brief(db: Session, brief_id: int) -> None:
 
         # ── Grab project context ────────────────────────────────────────────────
         project = db.query(Project).filter(Project.id == brief.project_id).first()
-        project_context = ""
-        if project:
-            project_context = (
-                f"\n\n=== PROJECT CONTEXT ===\n"
-                f"This question is being asked in the context of a marketing project for: "
-                f"{project.name} ({project.project_type.value.replace('_', ' ')})\n"
-            )
-            if project.description:
-                project_context += f"Project description: {project.description}\n"
-            project_context += (
-                "Please tailor your research and implications to this product/audience where relevant."
-            )
+        project_context = _build_project_context(db, brief.project_id, project)
 
         # ── Step 1: Google Search grounding ────────────────────────────────────
         logger.info(f"Research Brief {brief_id}: Step 1 — searching with Google grounding...")
