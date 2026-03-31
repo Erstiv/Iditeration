@@ -10,6 +10,7 @@ _p = load_prompt_module("06_chief_strategist")
 class ChiefStrategistAgent(BaseAgent):
     agent_name = "chief_strategist"
     system_prompt = _p.CHIEF_STRATEGIST_SYSTEM_PROMPT
+    output_schema = _p.CHIEF_STRATEGIST_OUTPUT_SCHEMA
 
     def _build_prompt(self, prior_outputs: dict[str, dict]) -> str:
         sections = []

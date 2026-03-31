@@ -12,6 +12,7 @@ _p = load_prompt_module("01_intake_analyst")
 class IntakeAnalystAgent(BaseAgent):
     agent_name = "intake_analyst"
     system_prompt = _p.INTAKE_ANALYST_SYSTEM_PROMPT
+    output_schema = _p.INTAKE_ANALYST_OUTPUT_SCHEMA
 
     def _build_prompt(self, prior_outputs: dict[str, dict]) -> str:
         sections = []

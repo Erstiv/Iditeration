@@ -124,7 +124,10 @@ class ResearchAgent(BaseAgent):
             '- "product_bible_entries": array of objects, each with "category" (one of: '
             "product_overview, research_findings, audience_segments, competitive_data, "
             'social_data), "title" (string), and "content" (string)\n'
-            '- "sources": array of URL strings where you found information\n\n'
+            '- "sources_cited": array of objects, each with "url" (the source URL), '
+            '"title" (short name of the source), "description" (one sentence about '
+            'what the source contains), and "finding" (one sentence about what we '
+            'learned from it)\n\n'
             "Return ONLY valid JSON. No markdown, no explanation."
         )
 

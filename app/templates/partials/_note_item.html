@@ -1,0 +1,28 @@
+<div class="note-item" id="note-{{ note.id }}" style="border-left: 2px solid var(--accent); padding: 0.75rem 1rem; margin-top: 0.75rem; background: rgba(99,102,241,0.04); border-radius: 0 6px 6px 0;">
+    <p class="text-sm text-dim" style="margin-bottom: 0.4rem;">
+        <em>{{ note.question }}</em>
+        <span style="margin-left: 0.75rem; font-size: 0.7rem;">${{ "%.4f"|format(note.cost_usd) }}</span>
+    </p>
+    <p class="text-sm" style="line-height: 1.6; white-space: pre-wrap; color: var(--text);">{{ note.answer }}</p>
+    <div id="push-{{ note.id }}" style="margin-top: 0.6rem;">
+        {% if note.bible_entry_id %}
+        <span class="badge badge-completed">In Bible</span>
+        {% else %}
+        <form hx-post="/projects/{{ project_id }}/notes/{{ note.id }}/push-to-bible"
+              hx-target="#push-{{ note.id }}"
+              hx-swap="outerHTML"
+              style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+            <input type="text" name="title"
+                   value="{{ note.question[:60] }}"
+                   placeholder="Bible entry title"
+                   style="width: 220px; font-size: 0.75rem; padding: 0.2rem 0.5rem;" required>
+            <select name="category" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; width: auto;">
+                {% for val, label in bible_categories %}
+                <option value="{{ val }}" {% if val == default_category %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline btn-sm">Push to Bible</button>
+        </form>
+        {% endif %}
+    </div>
+</div>

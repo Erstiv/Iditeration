@@ -7,6 +7,7 @@ Synthesizes into actionable positioning insights.
 
 Note: "Competitor" is a misnomer — this is really "everything in the same space."
 """
+from prompts import SOURCES_CITED_SCHEMA, SOURCES_CITED_PROMPT
 
 COMPETITIVE_INTELLIGENCE_SYSTEM_PROMPT = """You are the Competitive Intelligence analyst on a world-class marketing strategy team. You are obsessive about understanding the landscape. You don't just list competitors — you reverse-engineer WHY things succeeded or failed, extract the transferable lessons, and identify the white space where your product can win.
 
@@ -114,7 +115,7 @@ Return valid JSON matching the schema. Data points must be real and sourced.
 - Every "What We Learned" takeaway should end with a specific implication for OUR strategy
 - The white space analysis is the most valuable output — spend extra effort here
 - Include at least one non-obvious competitor that reveals a strategic insight
-"""
+""" + SOURCES_CITED_PROMPT
 
 COMPETITIVE_INTELLIGENCE_OUTPUT_SCHEMA = {
     "type": "object",
@@ -226,6 +227,7 @@ COMPETITIVE_INTELLIGENCE_OUTPUT_SCHEMA = {
                     "content": {"type": "string"}
                 }
             }
-        }
+        },
+        "sources_cited": SOURCES_CITED_SCHEMA
     }
 }

@@ -5,6 +5,7 @@ Role: Translates strategy into creative execution — the Creative Brief, messag
 per segment, CTAs, art direction, campaign deliverables. This is where strategy
 becomes something a team can actually build.
 """
+from prompts import SOURCES_CITED_SCHEMA, SOURCES_CITED_PROMPT
 
 CREATIVE_DIRECTOR_SYSTEM_PROMPT = """You are the Creative Director on a world-class marketing strategy team. You bridge strategy and execution. You take the strategist's vision, the behavioral scientist's frameworks, and the psychometrics expert's audience profiles, and you turn them into creative briefs that inspire teams to make outstanding work.
 
@@ -144,7 +145,7 @@ Return valid JSON matching the schema. Sample messages and CTAs should be polish
 - Art direction should be specific enough that a designer could start working from it
 - CTAs should activate specific behavioral mechanisms identified by the Behavioral Scientist
 - The challenge statement should be inspiring and galvanizing — teams should want to solve it
-"""
+""" + SOURCES_CITED_PROMPT
 
 CREATIVE_DIRECTOR_OUTPUT_SCHEMA = {
     "type": "object",
@@ -323,6 +324,7 @@ CREATIVE_DIRECTOR_OUTPUT_SCHEMA = {
                 "dos": {"type": "array", "items": {"type": "object", "properties": {"do": {"type": "string"}, "reason": {"type": "string"}}}},
                 "donts": {"type": "array", "items": {"type": "object", "properties": {"dont": {"type": "string"}, "reason": {"type": "string"}}}}
             }
-        }
+        },
+        "sources_cited": SOURCES_CITED_SCHEMA
     }
 }

@@ -11,6 +11,7 @@ _p = load_prompt_module("08_stakeholder_agent")
 class StakeholderAgent(BaseAgent):
     agent_name = "stakeholder_agent"
     system_prompt = _p.STAKEHOLDER_AGENT_SYSTEM_PROMPT_GENERATE
+    output_schema = _p.STAKEHOLDER_GENERATE_OUTPUT_SCHEMA
 
     def _build_prompt(self, prior_outputs: dict[str, dict]) -> str:
         sections = []
@@ -86,6 +87,7 @@ class StakeholderProcessAgent(BaseAgent):
     """Second mode: processes stakeholder answers back into the Product Bible."""
     agent_name = "stakeholder_agent"
     system_prompt = _p.STAKEHOLDER_AGENT_SYSTEM_PROMPT_PROCESS
+    output_schema = _p.STAKEHOLDER_PROCESS_OUTPUT_SCHEMA
 
     def _build_prompt(self, prior_outputs: dict[str, dict]) -> str:
         sections = []

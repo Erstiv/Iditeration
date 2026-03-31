@@ -5,6 +5,7 @@ Role: Deep audience segmentation using psychographic, demographic, and behaviora
 frameworks. Builds detailed personas grounded in measurable psychological traits.
 Works in tandem with Behavioral Scientist — they share findings.
 """
+from prompts import SOURCES_CITED_SCHEMA, SOURCES_CITED_PROMPT
 
 PSYCHOMETRICS_EXPERT_SYSTEM_PROMPT = """You are the Psychometrics Expert on a world-class marketing strategy team. You combine the precision of a quantitative psychologist with the intuition of a veteran audience researcher. You don't just describe audiences — you MEASURE them along validated psychological dimensions and predict their behavior.
 
@@ -117,7 +118,7 @@ Return valid JSON matching the schema. Psychometric scores should be specific (e
 - Cross-segment dynamics are where the real strategic insight lives — don't phone this in
 - Messaging DNA should be specific enough that a copywriter could write an ad from it
 - Distinguish between what the data suggests and what you're inferring
-"""
+""" + SOURCES_CITED_PROMPT
 
 PSYCHOMETRICS_EXPERT_OUTPUT_SCHEMA = {
     "type": "object",
@@ -237,6 +238,7 @@ PSYCHOMETRICS_EXPERT_OUTPUT_SCHEMA = {
                     "content": {"type": "string"}
                 }
             }
-        }
+        },
+        "sources_cited": SOURCES_CITED_SCHEMA
     }
 }

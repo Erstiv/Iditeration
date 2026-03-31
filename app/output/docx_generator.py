@@ -84,6 +84,7 @@ SKIP_KEYS = {
     "expertName", "expert_name", "analysisDate", "analysis_date",
     "preparedBy", "prepared_by", "version", "grandStrategyTitle",
     "behavioralScientist", "missing_information_alert",
+    "sources_cited", "sources",  # rendered in bibliography section
 }
 
 
@@ -173,6 +174,79 @@ def _render_dict(doc, data: dict, depth=2):
         _render_value(doc, v, depth=heading_level + 1)
 
 
+def _collect_all_citations(agent_outputs: dict) -> list[dict]:
+    """Gather and deduplicate citations from all agent outputs."""
+    seen_urls = set()
+    citations = []
+    for agent_data in agent_outputs.values():
+        if not isinstance(agent_data, dict):
+            continue
+        # Structured format (new)
+        for src in agent_data.get("sources_cited", []):
+            if isinstance(src, dict):
+                url = src.get("url", "")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    citations.append(src)
+        # Legacy format: plain URL strings
+        for url in agent_data.get("sources", []):
+            if isinstance(url, str) and url not in seen_urls:
+                seen_urls.add(url)
+                citations.append({
+                    "url": url,
+                    "title": url.split("//")[-1].split("/")[0],
+                    "description": "",
+                    "finding": "",
+                })
+    return citations
+
+
+def _render_bibliography(doc, citations: list[dict]):
+    """Render annotated bibliography entries into the DOCX."""
+    for i, cite in enumerate(citations, 1):
+        title = cite.get("title", "Untitled Source")
+        url = cite.get("url", "")
+        description = cite.get("description", "")
+        finding = cite.get("finding", "")
+
+        # Title line
+        p = doc.add_paragraph()
+        run = p.add_run(f"[{i}] {title}")
+        run.bold = True
+        run.font.size = Pt(10)
+
+        # URL
+        if url and url != "N/A":
+            p_url = doc.add_paragraph()
+            run_url = p_url.add_run(url)
+            run_url.font.size = Pt(8)
+            run_url.font.color.rgb = RGBColor(0x33, 0x66, 0x99)
+
+        # Description
+        if description:
+            p_desc = doc.add_paragraph()
+            label = p_desc.add_run("Contains: ")
+            label.italic = True
+            label.font.size = Pt(9)
+            label.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+            body = p_desc.add_run(description)
+            body.font.size = Pt(9)
+
+        # Finding
+        if finding:
+            p_find = doc.add_paragraph()
+            label = p_find.add_run("Key finding: ")
+            label.italic = True
+            label.font.size = Pt(9)
+            label.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+            body = p_find.add_run(finding)
+            body.font.size = Pt(9)
+
+        # Spacing between entries
+        if i < len(citations):
+            doc.add_paragraph("")
+
+
 def generate_marketing_plan(
     project_name: str,
     project_type: str,
@@ -226,6 +300,8 @@ def generate_marketing_plan(
     for _, section_title in AGENT_SECTIONS:
         p = doc.add_paragraph(section_title)
         p.style = doc.styles["List Number"]
+    p = doc.add_paragraph("8. Annotated Bibliography")
+    p.style = doc.styles["List Number"]
     doc.add_page_break()
 
     # ─── Render each agent's output ─────────────────────────
@@ -246,6 +322,13 @@ def generate_marketing_plan(
         # Render the agent's output tree
         _render_dict(doc, filtered, depth=2)
 
+        doc.add_page_break()
+
+    # ─── Annotated Bibliography ─────────────────────────────
+    all_citations = _collect_all_citations(agent_outputs)
+    if all_citations:
+        doc.add_heading("Annotated Bibliography", level=1)
+        _render_bibliography(doc, all_citations)
         doc.add_page_break()
 
     # ─── Footer note ────────────────────────────────────────
@@ -296,6 +379,23 @@ def generate_single_agent_docx(
         _render_dict(doc, filtered, depth=2)
     else:
         doc.add_paragraph("(No data from this agent.)")
+
+    # ─── Bibliography for this agent ────────────────────────
+    sources = agent_output.get("sources_cited", [])
+    legacy = agent_output.get("sources", [])
+    combined = list(sources)
+    for url in legacy:
+        if isinstance(url, str):
+            combined.append({
+                "url": url,
+                "title": url.split("//")[-1].split("/")[0],
+                "description": "",
+                "finding": "",
+            })
+    if combined:
+        doc.add_page_break()
+        doc.add_heading("Annotated Bibliography", level=1)
+        _render_bibliography(doc, combined)
 
     _add_page_numbers(doc)
     doc.save(output_path)

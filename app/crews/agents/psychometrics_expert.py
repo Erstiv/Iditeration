@@ -10,6 +10,7 @@ _p = load_prompt_module("03_psychometrics_expert")
 class PsychometricsExpertAgent(BaseAgent):
     agent_name = "psychometrics_expert"
     system_prompt = _p.PSYCHOMETRICS_EXPERT_SYSTEM_PROMPT
+    output_schema = _p.PSYCHOMETRICS_EXPERT_OUTPUT_SCHEMA
 
     def _build_prompt(self, prior_outputs: dict[str, dict]) -> str:
         sections = []

@@ -10,6 +10,7 @@ SKIP_KEYS = {
     "expertName", "expert_name", "analysisDate", "analysis_date",
     "preparedBy", "prepared_by", "version", "grandStrategyTitle",
     "behavioralScientist", "missing_information_alert",
+    "sources_cited", "sources",  # rendered in bibliography section
 }
 
 
@@ -98,6 +99,60 @@ def _render_dict_html(data: dict, depth=0) -> str:
     return "".join(parts)
 
 
+def _render_bibliography_html(output_json: dict) -> str:
+    """Render annotated bibliography from sources_cited / legacy sources."""
+    sources = output_json.get("sources_cited", [])
+    legacy = output_json.get("sources", [])
+    combined = list(sources)
+    for url in legacy:
+        if isinstance(url, str):
+            combined.append({
+                "url": url,
+                "title": url.split("//")[-1].split("/")[0],
+                "description": "",
+                "finding": "",
+            })
+    if not combined:
+        return ""
+
+    parts = [
+        '<hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0 1rem;">',
+        '<h3 style="font-size:1rem;color:var(--accent);margin-bottom:0.75rem;">Sources</h3>',
+    ]
+    for i, cite in enumerate(combined, 1):
+        title = _esc(cite.get("title", "Untitled Source"))
+        url = cite.get("url", "")
+        desc = cite.get("description", "")
+        finding = cite.get("finding", "")
+
+        card = (
+            f'<div style="border-left:3px solid var(--accent);padding:0.5rem 0.75rem;'
+            f'margin-bottom:0.75rem;background:rgba(255,255,255,0.03);">'
+            f'<div style="font-weight:600;font-size:0.9rem;color:var(--text);">[{i}] {title}</div>'
+        )
+        if url and url != "N/A":
+            card += (
+                f'<div style="font-size:0.75rem;color:var(--text-dim);margin-top:0.15rem;'
+                f'word-break:break-all;">{_esc(url)}</div>'
+            )
+        if desc:
+            card += (
+                f'<div style="font-size:0.85rem;margin-top:0.3rem;">'
+                f'<span style="color:var(--text-dim);font-style:italic;">Contains: </span>'
+                f'{_esc(desc)}</div>'
+            )
+        if finding:
+            card += (
+                f'<div style="font-size:0.85rem;margin-top:0.2rem;">'
+                f'<span style="color:var(--text-dim);font-style:italic;">Key finding: </span>'
+                f'{_esc(finding)}</div>'
+            )
+        card += '</div>'
+        parts.append(card)
+
+    return "".join(parts)
+
+
 def render_agent_output_html(output_json: dict) -> str:
     """Render an agent's output JSON as a styled HTML fragment."""
     if not output_json:
@@ -105,4 +160,6 @@ def render_agent_output_html(output_json: dict) -> str:
     filtered = {k: v for k, v in output_json.items() if k not in SKIP_KEYS and v}
     if not filtered:
         return '<p style="color:var(--text-dim);">Agent returned empty output.</p>'
-    return _render_dict_html(filtered, depth=0)
+    html = _render_dict_html(filtered, depth=0)
+    html += _render_bibliography_html(output_json)
+    return html

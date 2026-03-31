@@ -61,16 +61,17 @@
                 <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; align-items: center;">
                     {% if agent.status == 'completed' %}
                     <button class="btn btn-outline btn-sm"
-                            hx-get="/api/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/output"
-                            hx-target="#output-{{ agent.name }}"
-                            hx-swap="innerHTML"
-                            onclick="this.style.display='none'">
+                            onclick="let el=document.getElementById('output-{{ agent.name }}'); if(el.innerHTML && el.style.display!=='none'){el.style.display='none';this.textContent='View Output';}else{el.style.display='';if(!el.innerHTML){htmx.ajax('GET','/api/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/output',{target:el,swap:'innerHTML'});}this.textContent='Hide Output';}">
                         View Output
                     </button>
                     <form action="/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/export-docx"
                           method="post" style="display:inline;margin:0;">
                         <button type="submit" class="btn btn-outline btn-sm">Export DOCX</button>
                     </form>
+                    <button class="btn btn-outline btn-sm"
+                            onclick="let el=document.getElementById('chat-{{ agent.name }}'); if(el.innerHTML && el.style.display!=='none'){el.style.display='none';this.textContent='Ask / Refocus';}else{el.style.display='';if(!el.innerHTML){htmx.ajax('GET','/api/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/chat',{target:el,swap:'innerHTML'});}this.textContent='Hide Chat';}">
+                        Ask / Refocus
+                    </button>
                     {% endif %}
                     <form action="/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/rerun"
                           method="post" style="display:inline;margin:0;">
@@ -81,6 +82,7 @@
                     </form>
                 </div>
                 <div id="output-{{ agent.name }}"></div>
+                <div id="chat-{{ agent.name }}"></div>
                 {% endif %}
             </div>
         </div>
@@ -88,6 +90,26 @@
     </div>
 </div>
 
+{% if active_directives %}
+<div class="card mt-2" style="border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.04);">
+    <p class="text-sm" style="font-weight:600; color:var(--red); margin-bottom:0.4rem;">⛔ {{ active_directives|length }} Active Directive{{ 's' if active_directives|length > 1 else '' }}</p>
+    {% for d in active_directives %}
+    <p class="text-sm text-dim" style="margin:0.15rem 0;">{{ d.title }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+{% set pending_agents = run_status.agents | selectattr('status', 'equalto', 'pending') | list %}
+{% if pending_agents and run_status.status != 'running' %}
+<div class="card mt-2">
+    <h2>Pipeline Incomplete</h2>
+    <p class="text-sm text-dim" style="margin-bottom: 0.75rem;">
+        {{ pending_agents | length }} agent(s) still pending: {{ pending_agents | map(attribute='name') | map('replace', '_', ' ') | join(', ') | title }}
+    </p>
+    <form action="/projects/{{ project.id }}/runs/{{ run_status.id }}/continue" method="post" style="display: inline;">
+        <button type="submit" class="btn btn-primary">Continue Pipeline</button>
+    </form>
+</div>
+{% endif %}
 {% if run_status.status == 'completed' %}
 <div class="card mt-2">
     <h2>Generate Output</h2>

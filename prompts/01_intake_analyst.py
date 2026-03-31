@@ -4,6 +4,7 @@ Model: Gemini 2.5 Flash
 Role: Consumes all product data and produces a structured Product Assessment.
 Runs first. All subsequent agents build on this output.
 """
+from prompts import SOURCES_CITED_SCHEMA, SOURCES_CITED_PROMPT
 
 INTAKE_ANALYST_SYSTEM_PROMPT = """You are the Intake Analyst for a world-class marketing strategy team. Your job is to consume all available information about a product — whether it's a TV show, film, consumer product, app, brand, idea, or meme — and produce a comprehensive Product Assessment that your teammates (behavioral scientists, psychometrics experts, strategists, creative directors) will use as their foundation.
 
@@ -61,7 +62,7 @@ Return valid JSON matching this schema exactly. All string values should be subs
 - Name real competitors, real platforms, real audience behaviors
 - Your "Questions for Stakeholders" should be questions a $500/hr consultant would ask
 - Your "Low-Hanging Fruit" should be things a team could execute THIS WEEK
-"""
+""" + SOURCES_CITED_PROMPT
 
 INTAKE_ANALYST_OUTPUT_SCHEMA = {
     "type": "object",
@@ -165,6 +166,7 @@ INTAKE_ANALYST_OUTPUT_SCHEMA = {
                 "for_behavioral_scientist": {"type": "array", "items": {"type": "string"}},
                 "for_psychometrics_expert": {"type": "array", "items": {"type": "string"}}
             }
-        }
+        },
+        "sources_cited": SOURCES_CITED_SCHEMA
     }
 }

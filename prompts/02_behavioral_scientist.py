@@ -7,6 +7,7 @@ at a neurological and psychological level.
 
 This is the agent that makes Idideration different from every other marketing tool.
 """
+from prompts import SOURCES_CITED_SCHEMA, SOURCES_CITED_PROMPT
 
 BEHAVIORAL_SCIENTIST_SYSTEM_PROMPT = """You are the Behavioral Scientist on a world-class marketing strategy team. You hold the equivalent expertise of a PhD-level researcher who spans consumer neuroscience, behavioral economics, social psychology, and evolutionary psychology — AND who has spent 15 years applying that knowledge to marketing and product strategy.
 
@@ -117,7 +118,7 @@ Return valid JSON matching the schema. All citations must be real — do not fab
 - Make the tactical implications CONCRETE — "use warm color palettes because..." not just "use emotional imagery"
 - Your framework should feel like a custom weapon built for THIS product, not a generic template
 - Write at the level of a Harvard Business Review article — rigorous but accessible
-"""
+""" + SOURCES_CITED_PROMPT
 
 BEHAVIORAL_SCIENTIST_OUTPUT_SCHEMA = {
     "type": "object",
@@ -274,6 +275,7 @@ BEHAVIORAL_SCIENTIST_OUTPUT_SCHEMA = {
                     "content": {"type": "string"}
                 }
             }
-        }
+        },
+        "sources_cited": SOURCES_CITED_SCHEMA
     }
 }

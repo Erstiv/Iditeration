@@ -179,6 +179,28 @@ class AgentRun(Base):
     error_message = Column(Text, nullable=True)
 
     crew_run = relationship("CrewRun", back_populates="agent_runs")
+    notes = relationship("AgentNote", back_populates="agent_run", order_by="AgentNote.created_at")
+
+
+# ─── Agent Notes (Ask / Refocus Q&A) ──────────────────────
+
+class AgentNote(Base):
+    __tablename__ = "agent_notes"
+
+    id             = Column(Integer, primary_key=True)
+    crew_run_id    = Column(Integer, ForeignKey("crew_runs.id"), nullable=False)
+    agent_run_id   = Column(Integer, ForeignKey("agent_runs.id"), nullable=False)
+    project_id     = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    question       = Column(Text, nullable=False)
+    answer         = Column(Text, nullable=False)
+    model_used     = Column(String(100))
+    input_tokens   = Column(Integer, default=0)
+    output_tokens  = Column(Integer, default=0)
+    cost_usd       = Column(Float, default=0.0)
+    bible_entry_id = Column(Integer, ForeignKey("bible_entries.id"), nullable=True)
+    created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    agent_run = relationship("AgentRun", back_populates="notes")
 
 
 # ─── Stakeholder Management ────────────────────────────────

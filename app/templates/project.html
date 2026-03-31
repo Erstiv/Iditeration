@@ -15,6 +15,10 @@
     </div>
     <div style="display: flex; gap: 0.5rem;">
         <button class="btn btn-outline" onclick="document.getElementById('edit-modal').style.display='block'">Edit</button>
+        <form action="/projects/{{ project.id }}/delete" method="post" style="display: inline;"
+              onsubmit="return confirm('Delete {{ project.name }}? This cannot be undone.')">
+            <button type="submit" class="btn btn-danger">Delete</button>
+        </form>
         <form action="/projects/{{ project.id }}/run" method="post" style="display: inline;">
             <button type="submit" class="btn btn-primary">Run Full Analysis</button>
         </form>
@@ -68,9 +72,9 @@
             <h2>Selective Run</h2>
             <p class="text-sm text-dim mb-1">Choose specific agents to run.</p>
             <form action="/projects/{{ project.id }}/run" method="post">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem;">
+                <div style="display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-bottom: 1rem;">
                     {% for agent in agent_names %}
-                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
+                    <label style="display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer; white-space: nowrap;">
                         <input type="checkbox" name="agents" value="{{ agent }}">
                         {{ agent.replace('_', ' ').title() }}
                     </label>

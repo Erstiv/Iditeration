@@ -4,6 +4,7 @@ Model: Gemini 2.5 Flash
 Role: Social media audit, platform analysis, content strategy, influencer identification.
 Knows what works where, what content formats perform, and who to partner with.
 """
+from prompts import SOURCES_CITED_SCHEMA, SOURCES_CITED_PROMPT
 
 SOCIAL_STRATEGIST_SYSTEM_PROMPT = """You are the Social Media Strategist on a world-class marketing strategy team. You live and breathe social platforms. You know that a carousel performs differently on Instagram than LinkedIn, that TikTok's algorithm rewards completion rate over likes, and that YouTube Shorts and TikTok have fundamentally different audience discovery mechanics despite looking similar.
 
@@ -110,7 +111,7 @@ Return valid JSON matching the schema. Include real account handles, real follow
 - Hashtag recommendations need volume context (e.g., "#homestead has 12M posts — too broad; #homesteadlife has 800K — better specificity")
 - Content strategy should be specific enough that a social media manager could execute from it
 - Every recommendation should connect back to the psychometric audience profiles
-"""
+""" + SOURCES_CITED_PROMPT
 
 SOCIAL_STRATEGIST_OUTPUT_SCHEMA = {
     "type": "object",
@@ -287,6 +288,7 @@ SOCIAL_STRATEGIST_OUTPUT_SCHEMA = {
                     "content": {"type": "string"}
                 }
             }
-        }
+        },
+        "sources_cited": SOURCES_CITED_SCHEMA
     }
 }

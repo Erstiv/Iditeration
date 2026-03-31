@@ -47,19 +47,9 @@ class BaseAgent:
             # Call Gemini
             response = self._call_gemini(prompt)
 
-            # Parse output
-            output = self._parse_json_output(response.text)
-
-            # Write any product bible entries the agent generated
-            self._write_bible_entries(output)
-
-            # Update run record
-            self.agent_run.output_json = output
-            self.agent_run.output_raw = response.text
-            self.agent_run.status = RunStatus.COMPLETED
-            self.agent_run.completed_at = datetime.now(timezone.utc)
-
-            # Token tracking
+            # Save raw output immediately so it's never lost on parse failure
+            raw_text = response.text or ""
+            self.agent_run.output_raw = raw_text
             if hasattr(response, "usage_metadata") and response.usage_metadata:
                 usage = response.usage_metadata
                 self.agent_run.input_tokens = getattr(usage, "prompt_token_count", 0) or 0
@@ -68,7 +58,18 @@ class BaseAgent:
                 self.agent_run.cost_usd = self._estimate_cost(
                     self.agent_run.input_tokens, self.agent_run.output_tokens
                 )
+            self.db.commit()
 
+            # Parse output
+            output = self._parse_json_output(raw_text)
+
+            # Write any product bible entries the agent generated
+            self._write_bible_entries(output)
+
+            # Update run record
+            self.agent_run.output_json = output
+            self.agent_run.status = RunStatus.COMPLETED
+            self.agent_run.completed_at = datetime.now(timezone.utc)
             self.db.commit()
             return output
 
@@ -105,27 +106,39 @@ class BaseAgent:
 
         return "\n\n".join(sections)
 
-    def _call_gemini(self, prompt: str, max_retries: int = 4) -> object:
-        """Make the Gemini API call with exponential backoff for rate limits."""
+    def _call_gemini(self, prompt: str, max_retries: int = 4, timeout: int = 300) -> object:
+        """Make the Gemini API call with exponential backoff and a hard timeout."""
         import logging
+        import concurrent.futures
         log = logging.getLogger("idideration.base_agent")
+
+        def _do_call():
+            config_kwargs = dict(
+                system_instruction=self.system_prompt,
+                temperature=AGENT_TEMPERATURE,
+                max_output_tokens=AGENT_MAX_TOKENS,
+                response_mime_type="application/json",
+            )
+            if self.output_schema:
+                config_kwargs["response_schema"] = self.output_schema
+            return self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=types.GenerateContentConfig(**config_kwargs),
+            )
 
         for attempt in range(max_retries + 1):
             try:
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=self.system_prompt,
-                        temperature=AGENT_TEMPERATURE,
-                        max_output_tokens=AGENT_MAX_TOKENS,
-                        response_mime_type="application/json",
-                    ),
-                )
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_do_call)
+                    try:
+                        response = future.result(timeout=timeout)
+                    except concurrent.futures.TimeoutError:
+                        raise TimeoutError(f"Gemini call timed out after {timeout}s")
                 return response
             except Exception as e:
                 err_str = str(e).lower()
-                is_rate_limit = "429" in err_str or "rate" in err_str or "quota" in err_str or "resource_exhausted" in err_str
+                is_rate_limit = "429" in err_str or "503" in err_str or "rate" in err_str or "quota" in err_str or "resource_exhausted" in err_str or "unavailable" in err_str or "high demand" in err_str
                 if is_rate_limit and attempt < max_retries:
                     wait = 2 ** attempt * 5  # 5s, 10s, 20s, 40s
                     log.warning(f"Rate limit hit (attempt {attempt + 1}/{max_retries + 1}), waiting {wait}s...")
@@ -147,14 +160,28 @@ class BaseAgent:
         except json.JSONDecodeError:
             pass
 
-        # Attempt 2: Fix common issues — trailing commas, unescaped newlines in strings
-        fixed = re.sub(r",\s*([}\]])", r"\1", cleaned)  # trailing commas
+        # Attempt 2: Fix unescaped control characters inside string values
+        # Gemini sometimes emits literal \n, \t, \r inside JSON strings
+        def _escape_ctrl(m):
+            """Escape control chars inside a JSON string match."""
+            inner = m.group(1)
+            inner = inner.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+            return '"' + inner + '"'
+        ctrl_fixed = re.sub(r'"((?:[^"\\]|\\.)*)"', _escape_ctrl, cleaned, flags=re.DOTALL)
+        ctrl_fixed = re.sub(r",\s*([}\]])", r"\1", ctrl_fixed)
+        try:
+            return json.loads(ctrl_fixed)
+        except json.JSONDecodeError:
+            pass
+
+        # Attempt 3: trailing commas only (on original cleaned text)
+        fixed = re.sub(r",\s*([}\]])", r"\1", cleaned)
         try:
             return json.loads(fixed)
         except json.JSONDecodeError:
             pass
 
-        # Attempt 3: Find the outermost JSON object
+        # Attempt 5: Find the outermost JSON object
         brace_start = cleaned.find("{")
         brace_end = cleaned.rfind("}")
         if brace_start != -1 and brace_end != -1:
@@ -165,7 +192,7 @@ class BaseAgent:
             except json.JSONDecodeError:
                 pass
 
-        # Attempt 4: Ask Gemini to fix its own JSON (self-repair)
+        # Attempt 6: Ask Gemini to fix its own JSON (self-repair)
         import logging
         logging.getLogger("idideration.base_agent").warning(
             f"JSON parse failed after all attempts. Raw length: {len(cleaned)}. "

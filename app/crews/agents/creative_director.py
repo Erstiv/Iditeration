@@ -10,6 +10,7 @@ _p = load_prompt_module("07_creative_director")
 class CreativeDirectorAgent(BaseAgent):
     agent_name = "creative_director"
     system_prompt = _p.CREATIVE_DIRECTOR_SYSTEM_PROMPT
+    output_schema = _p.CREATIVE_DIRECTOR_OUTPUT_SCHEMA
 
     def _build_prompt(self, prior_outputs: dict[str, dict]) -> str:
         sections = []

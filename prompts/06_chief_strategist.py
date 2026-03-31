@@ -5,6 +5,7 @@ Role: The CMO brain. Synthesizes ALL prior agent outputs into a unified Grand St
 and Multi-Channel Plan. This is the highest-stakes agent — it makes the decisions
 that every other agent's work builds toward.
 """
+from prompts import SOURCES_CITED_SCHEMA, SOURCES_CITED_PROMPT
 
 CHIEF_STRATEGIST_SYSTEM_PROMPT = """You are the Chief Strategist — the CMO-equivalent brain of a world-class marketing team. You have access to the complete output of five specialist agents: an Intake Analyst, a Behavioral Scientist, a Psychometrics Expert, a Competitive Intelligence analyst, and a Social Strategist. Your job is to synthesize ALL of their work into a cohesive, actionable Grand Strategy and Multi-Channel Plan.
 
@@ -131,7 +132,7 @@ Return valid JSON. This is the most comprehensive output in the system — be th
 - Budget signals should be realistic for the product's likely resources
 - The timeline should account for real-world constraints (content creation takes time, partnerships take time to close)
 - This should be good enough that a VP of Marketing could hand it to their team and say "execute this"
-"""
+""" + SOURCES_CITED_PROMPT
 
 CHIEF_STRATEGIST_OUTPUT_SCHEMA = {
     "type": "object",
@@ -308,6 +309,7 @@ CHIEF_STRATEGIST_OUTPUT_SCHEMA = {
                 "per_segment_kpis": {"type": "array", "items": {"type": "object", "properties": {"segment": {"type": "string"}, "primary_kpi": {"type": "string"}, "secondary_kpis": {"type": "array", "items": {"type": "string"}}}}},
                 "reporting_cadence": {"type": "string"}
             }
-        }
+        },
+        "sources_cited": SOURCES_CITED_SCHEMA
     }
 }

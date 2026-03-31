@@ -10,6 +10,7 @@ _p = load_prompt_module("02_behavioral_scientist")
 class BehavioralScientistAgent(BaseAgent):
     agent_name = "behavioral_scientist"
     system_prompt = _p.BEHAVIORAL_SCIENTIST_SYSTEM_PROMPT
+    output_schema = _p.BEHAVIORAL_SCIENTIST_OUTPUT_SCHEMA
 
     def _build_prompt(self, prior_outputs: dict[str, dict]) -> str:
         sections = []

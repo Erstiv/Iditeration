@@ -5,6 +5,7 @@ Role: Generates context-aware stakeholder interview questions based on the Produ
 Assessment. Processes stakeholder answers back into the Product Bible.
 This agent runs in two modes: GENERATE (create questions) and PROCESS (ingest answers).
 """
+from prompts import SOURCES_CITED_SCHEMA, SOURCES_CITED_PROMPT
 
 STAKEHOLDER_AGENT_SYSTEM_PROMPT_GENERATE = """You are the Stakeholder Liaison on a world-class marketing strategy team. Your job is to design stakeholder interview questions that extract the maximum strategic value from the people closest to the product.
 
@@ -70,7 +71,7 @@ Return valid JSON matching the schema. Questions should be written in natural, c
 - Questions should be specific enough to get specific answers (not "what do you think about marketing?")
 - The gap-filling questions are the most valuable — they show you've done the homework
 - Include questions that might make stakeholders uncomfortable — those often yield the best insights
-"""
+""" + SOURCES_CITED_PROMPT
 
 STAKEHOLDER_AGENT_SYSTEM_PROMPT_PROCESS = """You are processing stakeholder interview responses. Your job is to extract every strategically relevant piece of information from the answers and write them to the Product Bible in a structured format.
 
@@ -90,7 +91,7 @@ Return valid JSON array of Product Bible entries, plus a summary of:
 - Contradictions between stakeholders
 - New information not previously known
 - Remaining gaps still unfilled
-"""
+""" + SOURCES_CITED_PROMPT
 
 STAKEHOLDER_GENERATE_OUTPUT_SCHEMA = {
     "type": "object",
@@ -160,7 +161,8 @@ STAKEHOLDER_GENERATE_OUTPUT_SCHEMA = {
                 "recommended_interview_order": {"type": "array", "items": {"type": "object", "properties": {"order": {"type": "integer"}, "role": {"type": "string"}, "rationale": {"type": "string"}}}},
                 "pre_interview_materials": {"type": "array", "items": {"type": "string"}}
             }
-        }
+        },
+        "sources_cited": SOURCES_CITED_SCHEMA
     }
 }
 
@@ -188,6 +190,7 @@ STAKEHOLDER_PROCESS_OUTPUT_SCHEMA = {
                 "new_information": {"type": "array", "items": {"type": "string"}},
                 "remaining_gaps": {"type": "array", "items": {"type": "string"}}
             }
-        }
+        },
+        "sources_cited": SOURCES_CITED_SCHEMA
     }
 }

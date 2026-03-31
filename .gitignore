@@ -22,6 +22,8 @@ build/
 # Generated output
 projects/*/output/*.docx
 projects/*/output/*.pdf
+projects/*.docx
+projects/*.pdf
 
 # OS
 .DS_Store

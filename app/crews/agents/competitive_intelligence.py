@@ -10,6 +10,7 @@ _p = load_prompt_module("04_competitive_intelligence")
 class CompetitiveIntelligenceAgent(BaseAgent):
     agent_name = "competitive_intelligence"
     system_prompt = _p.COMPETITIVE_INTELLIGENCE_SYSTEM_PROMPT
+    output_schema = _p.COMPETITIVE_INTELLIGENCE_OUTPUT_SCHEMA
 
     def _build_prompt(self, prior_outputs: dict[str, dict]) -> str:
         sections = []

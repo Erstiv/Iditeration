@@ -198,10 +198,64 @@ def rerun_single_agent(db: Session, crew_run_id: int, agent_name: AgentName):
     all_statuses = [ar.status for ar in crew_run.agent_runs]
     if any(s == RunStatus.FAILED for s in all_statuses):
         crew_run.status = RunStatus.FAILED
+    elif any(s == RunStatus.PENDING for s in all_statuses):
+        # Downstream agents still pending — don't mark completed
+        crew_run.status = RunStatus.FAILED
+        crew_run.error_message = "Pipeline incomplete — use Continue Pipeline to run remaining agents"
     else:
         crew_run.status = RunStatus.COMPLETED
     crew_run.completed_at = datetime.now(timezone.utc)
     db.commit()
+
+
+def continue_crew_run(db: Session, crew_run_id: int):
+    """Resume a crew run from the first pending agent, using existing completed outputs."""
+    crew_run = db.query(CrewRun).filter(CrewRun.id == crew_run_id).first()
+    if not crew_run:
+        raise ValueError(f"CrewRun {crew_run_id} not found")
+
+    crew_run.status = RunStatus.RUNNING
+    crew_run.error_message = None
+    crew_run.completed_at = None
+    db.commit()
+
+    # Build prior_outputs from all completed agents so far
+    prior_outputs: dict[str, dict] = {}
+    for ar in sorted(crew_run.agent_runs, key=lambda x: x.sequence_order):
+        if ar.status == RunStatus.COMPLETED and ar.output_json:
+            prior_outputs[ar.agent_name.value] = ar.output_json
+
+    try:
+        for ar in sorted(crew_run.agent_runs, key=lambda x: x.sequence_order):
+            if ar.status != RunStatus.PENDING:
+                continue  # Skip completed/failed agents
+
+            agent_class = AGENT_CLASS_MAP.get(ar.agent_name)
+            if not agent_class:
+                logger.error(f"No agent class for {ar.agent_name}")
+                ar.status = RunStatus.FAILED
+                ar.error_message = f"No agent class registered for {ar.agent_name.value}"
+                db.commit()
+                continue
+
+            logger.info(f"Continuing from agent: {ar.agent_name.value} (#{ar.sequence_order + 1})")
+            agent = agent_class(db=db, project_id=crew_run.project_id, agent_run=ar)
+            output = agent.run(prior_outputs)
+            prior_outputs[ar.agent_name.value] = output
+            logger.info(f"Agent {ar.agent_name.value} completed. Tokens: {ar.total_tokens}, Cost: ${ar.cost_usd:.4f}")
+
+        crew_run.status = RunStatus.COMPLETED
+        crew_run.completed_at = datetime.now(timezone.utc)
+        db.commit()
+        logger.info(f"Crew run {crew_run_id} continued and completed.")
+
+    except Exception as e:
+        logger.error(f"Crew run {crew_run_id} continue failed: {e}")
+        crew_run.status = RunStatus.FAILED
+        crew_run.error_message = str(e)
+        crew_run.completed_at = datetime.now(timezone.utc)
+        db.commit()
+        raise
 
 
 def get_crew_run_status(db: Session, crew_run_id: int) -> dict:

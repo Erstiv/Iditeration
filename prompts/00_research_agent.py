@@ -5,6 +5,7 @@ Role: Runs BEFORE all other agents. Given a product name and optional context,
       uses Google Search to find everything about the product and compiles a
       comprehensive product brief for the rest of the crew.
 """
+from prompts import SOURCES_CITED_SCHEMA, SOURCES_CITED_PROMPT
 
 RESEARCH_AGENT_SYSTEM_PROMPT = """You are the Research Agent for a world-class marketing strategy team. You are the FIRST agent to run — you receive a product name and possibly a URL or brief description, and your job is to research everything about it using Google Search.
 
@@ -77,4 +78,4 @@ Return a single JSON object with the schema described below. Be thorough but fac
 - If the product is very new or obscure, say so and focus on what IS available
 - Always include suggested_stakeholder_questions — things you couldn't find that the product owner would know
 - The product_bible_entries array should contain pre-formatted entries ready to be written into the Product Bible knowledge base
-"""
+""" + SOURCES_CITED_PROMPT

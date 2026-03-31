@@ -27,6 +27,7 @@ def _flex_get(d: dict, key: str, default=None):
 class SocialStrategistAgent(BaseAgent):
     agent_name = "social_strategist"
     system_prompt = _p.SOCIAL_STRATEGIST_SYSTEM_PROMPT
+    output_schema = _p.SOCIAL_STRATEGIST_OUTPUT_SCHEMA
 
     def _build_prompt(self, prior_outputs: dict[str, dict]) -> str:
         sections = []

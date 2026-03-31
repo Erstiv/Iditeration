@@ -1,0 +1,52 @@
+<div style="padding: 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; margin-top: 0.5rem;">
+
+    {# ── Ask Mode ──────────────────────────────────────────── #}
+    <div style="margin-bottom: 1.5rem;">
+        <p class="text-sm" style="font-weight: 600; margin-bottom: 0.5rem;">Ask a follow-up question</p>
+        <form hx-post="/projects/{{ project_id }}/runs/{{ run_id }}/agents/{{ agent_name }}/ask"
+              hx-target="#notes-{{ agent_name }}"
+              hx-swap="beforeend"
+              hx-indicator="#ask-spinner-{{ agent_name }}"
+              hx-on::after-request="this.querySelector('textarea').value=''"
+              style="display: flex; gap: 0.5rem; align-items: flex-start;">
+            <textarea name="question"
+                      placeholder="Why did you focus on X? Tell me more about Y..."
+                      style="flex: 1; min-height: 60px; font-size: 0.85rem;"
+                      required></textarea>
+            <div style="display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-end;">
+                <button type="submit" class="btn btn-primary btn-sm">Ask</button>
+                <span id="ask-spinner-{{ agent_name }}" class="htmx-indicator text-dim text-sm">thinking...</span>
+            </div>
+        </form>
+        <div id="notes-{{ agent_name }}">
+            {% for note in existing_notes %}
+            {% with %}
+            {% set bible_categories = bible_categories %}
+            {% set default_category = default_category %}
+            {% set project_id = project_id %}
+            {% include "partials/_note_item.html" %}
+            {% endwith %}
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ── Refocus Mode ──────────────────────────────────────── #}
+    <div style="border-top: 1px solid var(--border); padding-top: 1rem;">
+        <p class="text-sm" style="font-weight: 600; margin-bottom: 0.25rem;">Refocus this agent</p>
+        <p class="text-sm text-dim" style="margin-bottom: 0.6rem;">
+            Adds a mandatory directive to the Product Bible and reruns this agent immediately.
+        </p>
+        <form action="/projects/{{ project_id }}/runs/{{ run_id }}/agents/{{ agent_name }}/refocus"
+              method="post"
+              onsubmit="return confirm('Add directive and rerun {{ agent_name|replace(\'_\', \' \')|title }}? This will replace its current output.')">
+            <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+                <textarea name="directive"
+                          placeholder="Focus more on TikTok, less on LinkedIn. Target Gen Z as the primary segment."
+                          style="flex: 1; min-height: 60px; font-size: 0.85rem;"
+                          required></textarea>
+                <button type="submit" class="btn btn-danger btn-sm">Add Directive &amp; Rerun</button>
+            </div>
+        </form>
+    </div>
+
+</div>

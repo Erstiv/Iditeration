@@ -12,17 +12,48 @@ from app.database import get_db
 from app.models import (
     Project, ProjectType, CrewRun, AgentRun, AgentName,
     BibleEntry, BibleScope, BibleCategory, StakeholderQuestion,
-    OutputDocument, RunStatus,
+    OutputDocument, RunStatus, AgentNote,
 )
 from app.crews.marketing_bible import MarketingBibleTool
 from app.output.docx_generator import generate_marketing_plan, generate_stakeholder_questions_docx, generate_single_agent_docx
 from app.output.html_renderer import render_agent_output_html
-from app.crews.crew_runner import create_crew_run, execute_crew_run, get_crew_run_status, DEFAULT_AGENT_ORDER, rerun_single_agent
+from app.crews.crew_runner import create_crew_run, execute_crew_run, get_crew_run_status, DEFAULT_AGENT_ORDER, rerun_single_agent, continue_crew_run, AGENT_CLASS_MAP
 from app.config import PROJECTS_DIR, GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# ─── Agent interaction helpers ──────────────────────────────
+
+AGENT_DEFAULT_BIBLE_CATEGORY = {
+    "research_agent":           "research_findings",
+    "intake_analyst":           "product_overview",
+    "behavioral_scientist":     "audience_segments",
+    "psychometrics_expert":     "audience_segments",
+    "competitive_intelligence": "competitive_data",
+    "social_strategist":        "social_data",
+    "chief_strategist":         "strategy",
+    "creative_director":        "creative",
+    "stakeholder_agent":        "stakeholder_input",
+}
+
+PUSH_BIBLE_CATEGORIES = [
+    ("research_findings",  "Research Findings"),
+    ("product_overview",   "Product Overview"),
+    ("audience_segments",  "Audience Segments"),
+    ("competitive_data",   "Competitive Data"),
+    ("social_data",        "Social Data"),
+    ("strategy",           "Strategy"),
+    ("creative",           "Creative"),
+    ("stakeholder_input",  "Stakeholder Input"),
+]
+
+
+def _estimate_note_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    if "pro" in model:
+        return round((input_tokens / 1_000_000) * 1.25 + (output_tokens / 1_000_000) * 10.00, 4)
+    return round((input_tokens / 1_000_000) * 0.15 + (output_tokens / 1_000_000) * 0.60, 4)
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
 
 
@@ -156,6 +187,16 @@ async def project_detail(request: Request, project_id: int, db: Session = Depend
     })
 
 
+@router.post("/projects/{project_id}/delete")
+async def delete_project(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        return RedirectResponse(url="/", status_code=303)
+    db.delete(project)
+    db.commit()
+    return RedirectResponse(url="/", status_code=303)
+
+
 @router.post("/projects/{project_id}/update")
 async def update_project(
     project_id: int,
@@ -198,9 +239,12 @@ async def start_crew_run(
 async def run_status_page(request: Request, project_id: int, run_id: int, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.id == project_id).first()
     status = get_crew_run_status(db, run_id)
+    bible = MarketingBibleTool(db, project_id)
+    active_directives = bible.get_project_entries(category=BibleCategory.DIRECTIVES)
     return templates.TemplateResponse(request, "run_status.html", {
         "project": project,
         "run_status": status,
+        "active_directives": active_directives,
     })
 
 
@@ -333,6 +377,24 @@ async def export_agent_docx(
     return FileResponse(output_path, filename=filename)
 
 
+@router.post("/projects/{project_id}/runs/{run_id}/continue")
+async def continue_run(
+    project_id: int,
+    run_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Continue a crew run from the first pending agent."""
+    crew_run = db.query(CrewRun).filter(CrewRun.id == run_id).first()
+    if not crew_run:
+        return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+    running = any(ar.status == RunStatus.RUNNING for ar in crew_run.agent_runs)
+    if running:
+        return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
+    background_tasks.add_task(continue_crew_run, db, run_id)
+    return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
+
+
 @router.post("/projects/{project_id}/runs/{run_id}/agents/{agent_name}/rerun")
 async def rerun_agent(
     project_id: int,
@@ -355,6 +417,175 @@ async def rerun_agent(
         agent_enum = AgentName(agent_name)
     except ValueError:
         return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
+
+    background_tasks.add_task(rerun_single_agent, db, run_id, agent_enum)
+    return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
+
+
+# ─── Agent Interaction (Ask / Refocus) ───────────────────────
+
+@router.get("/api/projects/{project_id}/runs/{run_id}/agents/{agent_name}/chat", response_class=HTMLResponse)
+async def agent_chat_fragment(
+    request: Request,
+    project_id: int,
+    run_id: int,
+    agent_name: str,
+    db: Session = Depends(get_db),
+):
+    """Load the Ask/Refocus panel for a single agent."""
+    agent_run = db.query(AgentRun).filter(
+        AgentRun.crew_run_id == run_id,
+        AgentRun.agent_name == AgentName(agent_name),
+    ).first()
+    existing_notes = agent_run.notes if agent_run else []
+    return templates.TemplateResponse(request, "partials/_agent_chat.html", {
+        "existing_notes": existing_notes,
+        "project_id": project_id,
+        "run_id": run_id,
+        "agent_name": agent_name,
+        "bible_categories": PUSH_BIBLE_CATEGORIES,
+        "default_category": AGENT_DEFAULT_BIBLE_CATEGORY.get(agent_name, "research_findings"),
+    })
+
+
+@router.post("/projects/{project_id}/runs/{run_id}/agents/{agent_name}/ask", response_class=HTMLResponse)
+async def agent_ask(
+    request: Request,
+    project_id: int,
+    run_id: int,
+    agent_name: str,
+    question: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Ask a follow-up question to an agent about its output."""
+    from google import genai as _genai
+    from google.genai import types as _genai_types
+
+    agent_run = db.query(AgentRun).filter(
+        AgentRun.crew_run_id == run_id,
+        AgentRun.agent_name == AgentName(agent_name),
+    ).first()
+
+    if not agent_run or not agent_run.output_json:
+        return HTMLResponse('<p style="color:var(--red);">Agent has no output to ask about.</p>')
+
+    model = agent_run.model_used or "gemini-2.5-flash"
+    agent_class = AGENT_CLASS_MAP.get(AgentName(agent_name))
+    system_prompt = agent_class.system_prompt if agent_class else ""
+
+    ask_prompt = (
+        f"=== YOUR PREVIOUS OUTPUT (CONTEXT) ===\n"
+        f"{json.dumps(agent_run.output_json, indent=2, default=str)[:20000]}\n\n"
+        f"=== USER QUESTION ===\n{question}\n\n"
+        f"Answer the question directly based on your output above. "
+        f"Respond in plain text, not JSON. Be specific and concise."
+    )
+
+    try:
+        client = _genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model=model,
+            contents=ask_prompt,
+            config=_genai_types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.3,
+                max_output_tokens=4096,
+            ),
+        )
+        answer = response.text or "(No response)"
+        in_tok = out_tok = 0
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            in_tok = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
+            out_tok = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+        cost = _estimate_note_cost(model, in_tok, out_tok)
+    except Exception as e:
+        answer = f"(Error getting response: {e})"
+        in_tok = out_tok = cost = 0
+
+    note = AgentNote(
+        crew_run_id=run_id,
+        agent_run_id=agent_run.id,
+        project_id=project_id,
+        question=question,
+        answer=answer,
+        model_used=model,
+        input_tokens=in_tok,
+        output_tokens=out_tok,
+        cost_usd=cost,
+    )
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+
+    return templates.TemplateResponse(request, "partials/_note_item.html", {
+        "note": note,
+        "project_id": project_id,
+        "bible_categories": PUSH_BIBLE_CATEGORIES,
+        "default_category": AGENT_DEFAULT_BIBLE_CATEGORY.get(agent_name, "research_findings"),
+    })
+
+
+@router.post("/projects/{project_id}/notes/{note_id}/push-to-bible", response_class=HTMLResponse)
+async def push_note_to_bible(
+    request: Request,
+    project_id: int,
+    note_id: int,
+    category: str = Form(...),
+    title: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Push an AgentNote's answer into the Product Bible."""
+    note = db.query(AgentNote).filter(
+        AgentNote.id == note_id,
+        AgentNote.project_id == project_id,
+    ).first()
+
+    if not note or note.bible_entry_id:
+        return HTMLResponse('<span class="badge badge-completed">In Bible</span>')
+
+    bible = MarketingBibleTool(db, project_id)
+    entry = bible.add_entry(
+        category=BibleCategory(category),
+        title=title,
+        content=note.answer,
+        source=f"ask:{note.agent_run.agent_name.value}",
+    )
+    note.bible_entry_id = entry.id
+    db.commit()
+
+    return HTMLResponse('<span class="badge badge-completed">In Bible</span>')
+
+
+@router.post("/projects/{project_id}/runs/{run_id}/agents/{agent_name}/refocus")
+async def agent_refocus(
+    project_id: int,
+    run_id: int,
+    agent_name: str,
+    background_tasks: BackgroundTasks,
+    directive: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Add a directive to the Product Bible and rerun the agent."""
+    crew_run = db.query(CrewRun).filter(CrewRun.id == run_id).first()
+    if not crew_run:
+        return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+    running = any(ar.status == RunStatus.RUNNING for ar in crew_run.agent_runs)
+    if running:
+        return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
+
+    try:
+        agent_enum = AgentName(agent_name)
+    except ValueError:
+        return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
+
+    bible = MarketingBibleTool(db, project_id)
+    bible.add_entry(
+        category=BibleCategory.DIRECTIVES,
+        title=f"[{agent_name.replace('_', ' ').title()}] {directive[:80]}",
+        content=directive,
+        source=f"refocus:{agent_name}",
+    )
 
     background_tasks.add_task(rerun_single_agent, db, run_id, agent_enum)
     return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
