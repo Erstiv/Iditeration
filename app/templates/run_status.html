@@ -64,6 +64,10 @@
                             onclick="let el=document.getElementById('output-{{ agent.name }}'); if(el.innerHTML && el.style.display!=='none'){el.style.display='none';this.textContent='View Output';}else{el.style.display='';if(!el.innerHTML){htmx.ajax('GET','/api/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/output',{target:el,swap:'innerHTML'});}this.textContent='Hide Output';}">
                         View Output
                     </button>
+                    <button class="btn btn-outline btn-sm"
+                            onclick="let el=document.getElementById('output-{{ agent.name }}'); el.style.display=''; htmx.ajax('GET','/api/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/edit',{target:el,swap:'innerHTML'});">
+                        Edit Output
+                    </button>
                     <form action="/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/export-docx"
                           method="post" style="display:inline;margin:0;">
                         <button type="submit" class="btn btn-outline btn-sm">Export DOCX</button>

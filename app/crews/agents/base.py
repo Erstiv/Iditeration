@@ -98,6 +98,13 @@ class BaseAgent:
             sections.append(json.dumps(output, indent=2, default=str)[:30000])
             sections.append(f"=== END {agent_name.upper()} ===\n")
 
+        # One-time rerun guidance (if provided)
+        if self.agent_run.rerun_guidance:
+            sections.append("=== ONE-TIME INSTRUCTION (from user) ===")
+            sections.append(self.agent_run.rerun_guidance)
+            sections.append("Apply this instruction to your output. This is a one-time directive — prioritize it.")
+            sections.append("=== END INSTRUCTION ===\n")
+
         # Task instruction
         sections.append("=== YOUR TASK ===")
         sections.append("Analyze all the context above and produce your output as valid JSON.")

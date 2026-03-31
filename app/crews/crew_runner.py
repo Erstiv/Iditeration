@@ -143,7 +143,7 @@ def execute_crew_run(db: Session, crew_run_id: int):
         raise
 
 
-def rerun_single_agent(db: Session, crew_run_id: int, agent_name: AgentName):
+def rerun_single_agent(db: Session, crew_run_id: int, agent_name: AgentName, guidance: str | None = None):
     """Re-execute a single agent within an existing crew run."""
     crew_run = db.query(CrewRun).filter(CrewRun.id == crew_run_id).first()
     if not crew_run:
@@ -171,6 +171,7 @@ def rerun_single_agent(db: Session, crew_run_id: int, agent_name: AgentName):
     target.started_at = None
     target.completed_at = None
     target.model_used = None
+    target.rerun_guidance = guidance  # Store one-time guidance (cleared on next rerun)
 
     crew_run.status = RunStatus.RUNNING
     db.commit()
@@ -186,7 +187,7 @@ def rerun_single_agent(db: Session, crew_run_id: int, agent_name: AgentName):
         if not agent_class:
             raise ValueError(f"No agent class registered for {agent_name.value}")
 
-        logger.info(f"Rerunning agent: {agent_name.value}")
+        logger.info(f"Rerunning agent: {agent_name.value}" + (f" with guidance" if guidance else ""))
         agent = agent_class(db=db, project_id=crew_run.project_id, agent_run=target)
         agent.run(prior_outputs)
         logger.info(f"Agent {agent_name.value} rerun completed. Tokens: {target.total_tokens}, Cost: ${target.cost_usd:.4f}")

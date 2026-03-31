@@ -16,7 +16,7 @@ from app.models import (
 )
 from app.crews.marketing_bible import MarketingBibleTool
 from app.output.docx_generator import generate_marketing_plan, generate_stakeholder_questions_docx, generate_single_agent_docx
-from app.output.html_renderer import render_agent_output_html
+from app.output.html_renderer import render_agent_output_html, render_agent_output_editable_html
 from app.crews.crew_runner import create_crew_run, execute_crew_run, get_crew_run_status, DEFAULT_AGENT_ORDER, rerun_single_agent, continue_crew_run, AGENT_CLASS_MAP
 from app.config import PROJECTS_DIR, GEMINI_API_KEY
 
@@ -332,6 +332,100 @@ async def agent_output_fragment(
     })
 
 
+@router.get("/api/projects/{project_id}/runs/{run_id}/agents/{agent_name}/edit", response_class=HTMLResponse)
+async def agent_edit_fragment(
+    request: Request,
+    project_id: int,
+    run_id: int,
+    agent_name: str,
+    db: Session = Depends(get_db),
+):
+    """Return editable HTML form of a single agent's output."""
+    agent_run = db.query(AgentRun).filter(
+        AgentRun.crew_run_id == run_id,
+        AgentRun.agent_name == AgentName(agent_name),
+    ).first()
+
+    if not agent_run or not agent_run.output_json:
+        edit_html = '<p style="color:var(--text-dim);">No output available to edit.</p>'
+    else:
+        edit_html = render_agent_output_editable_html(agent_run.output_json)
+
+    form_html = (
+        f'<form hx-post="/api/projects/{project_id}/runs/{run_id}/agents/{agent_name}/save-edit" '
+        f'hx-target="#output-{agent_name}" hx-swap="innerHTML">'
+        f'{edit_html}'
+        f'<div style="margin-top:1rem;display:flex;gap:0.5rem;">'
+        f'<button type="submit" class="btn btn-primary btn-sm">Save Edits</button>'
+        f'<button type="button" class="btn btn-outline btn-sm" '
+        f'onclick="htmx.ajax(\'GET\',\'/api/projects/{project_id}/runs/{run_id}/agents/{agent_name}/output\','
+        f'{{target:\'#output-{agent_name}\',swap:\'innerHTML\'}})">Cancel</button>'
+        f'</div></form>'
+    )
+    return HTMLResponse(
+        f'<div style="padding:1rem;background:var(--bg);border:1px solid var(--accent);'
+        f'border-radius:6px;margin-top:0.5rem;max-height:600px;overflow-y:auto;font-size:0.85rem;">'
+        f'{form_html}</div>'
+    )
+
+
+@router.post("/api/projects/{project_id}/runs/{run_id}/agents/{agent_name}/save-edit", response_class=HTMLResponse)
+async def agent_save_edit(
+    request: Request,
+    project_id: int,
+    run_id: int,
+    agent_name: str,
+    db: Session = Depends(get_db),
+):
+    """Save edited agent output fields back to the database."""
+    agent_run = db.query(AgentRun).filter(
+        AgentRun.crew_run_id == run_id,
+        AgentRun.agent_name == AgentName(agent_name),
+    ).first()
+
+    if not agent_run or not agent_run.output_json:
+        return HTMLResponse('<p style="color:var(--red);">Agent run not found.</p>')
+
+    form_data = await request.form()
+    output = agent_run.output_json.copy() if isinstance(agent_run.output_json, dict) else {}
+
+    # Reconstruct JSON from form field paths (e.g., "platform_audit.0.platform")
+    for field_name, value in form_data.items():
+        _set_nested(output, field_name.split("."), str(value))
+
+    agent_run.output_json = output
+    db.commit()
+
+    rendered_html = render_agent_output_html(output)
+    return templates.TemplateResponse(request, "partials/_agent_output.html", {
+        "rendered_html": rendered_html,
+    })
+
+
+def _set_nested(obj, keys: list[str], value):
+    """Set a value in a nested dict/list structure using a list of path keys."""
+    for i, key in enumerate(keys[:-1]):
+        next_key = keys[i + 1]
+        if key.isdigit():
+            key = int(key)
+            while len(obj) <= key:
+                obj.append({} if not next_key.isdigit() else [])
+            obj = obj[key]
+        else:
+            if key not in obj:
+                obj[key] = [] if next_key.isdigit() else {}
+            obj = obj[key]
+
+    final_key = keys[-1]
+    if final_key.isdigit():
+        idx = int(final_key)
+        while len(obj) <= idx:
+            obj.append("")
+        obj[idx] = value
+    else:
+        obj[final_key] = value
+
+
 @router.post("/projects/{project_id}/runs/{run_id}/agents/{agent_name}/export-docx")
 async def export_agent_docx(
     project_id: int,
@@ -588,6 +682,33 @@ async def agent_refocus(
     )
 
     background_tasks.add_task(rerun_single_agent, db, run_id, agent_enum)
+    return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
+
+
+@router.post("/projects/{project_id}/runs/{run_id}/agents/{agent_name}/rerun-guided")
+async def agent_rerun_guided(
+    project_id: int,
+    run_id: int,
+    agent_name: str,
+    background_tasks: BackgroundTasks,
+    guidance: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Rerun an agent with one-time guidance (not persisted to Bible)."""
+    crew_run = db.query(CrewRun).filter(CrewRun.id == run_id).first()
+    if not crew_run:
+        return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+    running = any(ar.status == RunStatus.RUNNING for ar in crew_run.agent_runs)
+    if running:
+        return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
+
+    try:
+        agent_enum = AgentName(agent_name)
+    except ValueError:
+        return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
+
+    background_tasks.add_task(rerun_single_agent, db, run_id, agent_enum, guidance=guidance)
     return RedirectResponse(url=f"/projects/{project_id}/runs/{run_id}", status_code=303)
 
 

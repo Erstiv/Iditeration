@@ -163,3 +163,105 @@ def render_agent_output_html(output_json: dict) -> str:
     html = _render_dict_html(filtered, depth=0)
     html += _render_bibliography_html(output_json)
     return html
+
+
+# ─── Editable Renderer ────────────────────────────────────────
+
+
+def _editable_value_html(value, path: str, depth=0) -> str:
+    """Render a value as an editable field with a JSON path name."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        rows = max(2, min(8, value.count("\n") + 1, len(value) // 80 + 1))
+        return (
+            f'<textarea name="{_esc(path)}" '
+            f'style="width:100%;min-height:{rows * 1.4}em;font-size:0.85rem;'
+            f'background:var(--bg);color:var(--text);border:1px solid var(--border);'
+            f'border-radius:4px;padding:0.4rem;resize:vertical;font-family:inherit;"'
+            f'>{_esc(value)}</textarea>'
+        )
+    if isinstance(value, bool):
+        checked = " checked" if value else ""
+        return (
+            f'<label style="display:flex;align-items:center;gap:0.4rem;margin:0.25rem 0;">'
+            f'<input type="checkbox" name="{_esc(path)}" value="true"{checked}>'
+            f'<span class="text-dim text-sm">{_esc(str(value))}</span></label>'
+        )
+    if isinstance(value, (int, float)):
+        return (
+            f'<input type="text" name="{_esc(path)}" value="{_esc(str(value))}" '
+            f'style="width:12em;font-size:0.85rem;background:var(--bg);color:var(--text);'
+            f'border:1px solid var(--border);border-radius:4px;padding:0.3rem 0.4rem;">'
+        )
+    if isinstance(value, list):
+        parts = []
+        for i, item in enumerate(value):
+            item_path = f"{path}.{i}"
+            if isinstance(item, dict):
+                parts.append(
+                    f'<div style="border:1px solid var(--border);border-radius:4px;'
+                    f'padding:0.5rem;margin:0.4rem 0;background:rgba(255,255,255,0.02);">'
+                    f'{_editable_dict_html(item, item_path, depth + 1)}</div>'
+                )
+            else:
+                parts.append(
+                    f'<div style="margin:0.2rem 0;">'
+                    f'{_editable_value_html(item, item_path, depth + 1)}</div>'
+                )
+        return "".join(parts)
+    if isinstance(value, dict):
+        return _editable_dict_html(value, path, depth)
+    return (
+        f'<input type="text" name="{_esc(path)}" value="{_esc(str(value))}" '
+        f'style="width:100%;font-size:0.85rem;background:var(--bg);color:var(--text);'
+        f'border:1px solid var(--border);border-radius:4px;padding:0.3rem 0.4rem;">'
+    )
+
+
+def _editable_dict_html(data: dict, prefix: str, depth=0) -> str:
+    """Render a dict with editable fields, using JSON path prefixes."""
+    if not data:
+        return ""
+
+    tag = f"h{min(depth + 4, 6)}"
+    sizes = {4: "0.9rem", 5: "0.85rem", 6: "0.8rem"}
+    size = sizes.get(min(depth + 4, 6), "0.8rem")
+
+    parts = []
+    for k, v in data.items():
+        if k in SKIP_KEYS:
+            continue
+        if not v and v != 0 and v is not False:
+            continue
+        path = f"{prefix}.{k}" if prefix else k
+        label = _humanize_key(k)
+
+        if isinstance(v, (str, int, float, bool)):
+            parts.append(
+                f'<div style="margin:0.4rem 0;">'
+                f'<label style="font-weight:600;font-size:0.8rem;color:var(--text);'
+                f'display:block;margin-bottom:0.15rem;">{_esc(label)}</label>'
+                f'{_editable_value_html(v, path, depth)}</div>'
+            )
+        elif isinstance(v, (list, dict)):
+            parts.append(
+                f'<{tag} style="font-size:{size};margin:0.6rem 0 0.25rem;color:var(--accent);">'
+                f'{_esc(label)}</{tag}>'
+            )
+            parts.append(
+                f'<div style="padding-left:0.5rem;">'
+                f'{_editable_value_html(v, path, depth + 1)}</div>'
+            )
+
+    return "".join(parts)
+
+
+def render_agent_output_editable_html(output_json: dict) -> str:
+    """Render an agent's output JSON as editable form fields."""
+    if not output_json:
+        return '<p style="color:var(--text-dim);">No output available to edit.</p>'
+    filtered = {k: v for k, v in output_json.items() if k not in SKIP_KEYS and v}
+    if not filtered:
+        return '<p style="color:var(--text-dim);">Agent returned empty output.</p>'
+    return _editable_dict_html(filtered, prefix="", depth=0)

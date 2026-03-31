@@ -111,7 +111,7 @@ ssh filou "journalctl -u idideration --no-pager -n 30"
 ### .env (both local and Hetzner)
 ```
 DATABASE_URL=sqlite:///idideration.db  (local) or sqlite:////opt/idideration/idideration.db (Hetzner)
-GEMINI_API_KEY=AIzaSyBeMhldC9wbJjRbduWY3egsNSEDkkF8TNQ
+GEMINI_API_KEY=<in .env file, not committed — rotate if exposed>
 SESSION_SECRET=<random>
 NARRALYTICA_API_URL=http://localhost:8005/api
 APP_HOST=0.0.0.0 (local) or 127.0.0.1 (Hetzner)

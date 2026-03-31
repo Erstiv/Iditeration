@@ -177,6 +177,8 @@ class AgentRun(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
+    # One-time guidance for a rerun (not persisted to Bible)
+    rerun_guidance = Column(Text, nullable=True)
 
     crew_run = relationship("CrewRun", back_populates="agent_runs")
     notes = relationship("AgentNote", back_populates="agent_run", order_by="AgentNote.created_at")
@@ -224,24 +226,9 @@ class StakeholderQuestion(Base):
 
 # ─── Research Citations ─────────────────────────────────────
 
-class ResearchCitation(Base):
-    __tablename__ = "research_citations"
-
-    id = Column(Integer, primary_key=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
-    agent_run_id = Column(Integer, ForeignKey("agent_runs.id"), nullable=True)
-    title = Column(String(500), nullable=False)
-    authors = Column(String(500))
-    journal = Column(String(255))
-    year = Column(Integer)
-    doi = Column(String(255))
-    url = Column(String(1000))
-    key_finding = Column(Text)
-    relevance_score = Column(String(20))  # high/medium/low
-    quote = Column(Text)
-    framework_support = Column(Text)
-    evidence_strength = Column(String(20))  # established/strong/moderate/emerging
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+# NOTE: ResearchCitation model removed — citations now live in agent output JSON
+# (sources_cited field). The research_citations table may still exist in DBs
+# but is no longer used or populated.
 
 
 # ─── Output Documents ──────────────────────────────────────
