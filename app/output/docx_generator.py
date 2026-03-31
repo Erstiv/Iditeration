@@ -279,10 +279,24 @@ def generate_marketing_plan(
     agent_outputs: dict[str, dict],
     output_path: str,
     citations: list[dict] = None,
+    stakeholder_questions: list[dict] = None,
 ) -> str:
-    """Generate the comprehensive marketing plan DOCX from all agent outputs."""
+    """Generate the comprehensive marketing plan DOCX from all agent outputs.
+
+    Stakeholder section positioning is dynamic:
+    - No answers yet → section appears FIRST (action item for reader)
+    - Any answers exist → section appears LAST with full Q&A audit trail
+    - No questions at all → section omitted
+    """
     doc = Document()
     _setup_styles(doc)
+
+    sq = stakeholder_questions or []
+    has_any_questions = len(sq) > 0
+    has_any_answers = any(q.get("answer") for q in sq)
+
+    # Sections excluding stakeholder (we'll insert it manually)
+    main_sections = [(k, t) for k, t in AGENT_SECTIONS if k != "stakeholder_agent"]
 
     # ─── Cover Page ─────────────────────────────────────────
     doc.add_paragraph("")
@@ -323,32 +337,120 @@ def generate_marketing_plan(
 
     # ─── Table of Contents ──────────────────────────────────
     doc.add_heading("Table of Contents", level=1)
-    for _, section_title in AGENT_SECTIONS:
-        p = doc.add_paragraph(section_title)
+
+    toc_sections = []
+    if has_any_questions and not has_any_answers:
+        # Stakeholder questions first
+        toc_sections.append("Stakeholder Interview Questions")
+        toc_sections.extend(t for _, t in main_sections)
+    else:
+        toc_sections.extend(t for _, t in main_sections)
+        if has_any_questions:
+            toc_sections.append("Stakeholder Interviews — Q&A Record")
+    toc_sections.append("Annotated Bibliography")
+
+    for i, title_text in enumerate(toc_sections, 1):
+        p = doc.add_paragraph(f"{i}. {title_text}")
         p.style = doc.styles["List Number"]
-    p = doc.add_paragraph("9. Annotated Bibliography")
-    p.style = doc.styles["List Number"]
     doc.add_page_break()
 
-    # ─── Render each agent's output ─────────────────────────
-    for agent_key, section_title in AGENT_SECTIONS:
-        agent_data = agent_outputs.get(agent_key, {})
-
-        doc.add_heading(section_title, level=1)
-
-        if not agent_data:
-            doc.add_paragraph("(No data from this agent.)")
+    # ─── Helper: render stakeholder section ─────────────────
+    def _render_stakeholder_section(heading: str):
+        doc.add_heading(heading, level=1)
+        if not sq:
+            doc.add_paragraph("(No stakeholder questions generated.)")
             doc.add_page_break()
-            continue
+            return
 
-        # Filter out metadata keys
-        filtered = {k: v for k, v in agent_data.items()
-                    if k not in SKIP_KEYS and v}
+        answered = [q for q in sq if q.get("answer")]
+        outstanding = [q for q in sq if not q.get("answer")]
 
-        # Render the agent's output tree
-        _render_dict(doc, filtered, depth=2)
+        current_role = None
+
+        if not has_any_answers:
+            # Pure question list — grouped by role, with answer lines
+            for q in sq:
+                role = (q.get("target_role") or "General").replace("_", " ").title()
+                if role != current_role:
+                    current_role = role
+                    doc.add_heading(role, level=2)
+                doc.add_paragraph(q.get("question", ""), style="List Number")
+                if q.get("purpose"):
+                    p = doc.add_paragraph(f"  Purpose: {q['purpose']}")
+                    p.runs[0].italic = True
+                    p.runs[0].font.size = Pt(9)
+                    p.runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+                doc.add_paragraph("  Answer: _______________________________________________")
+                doc.add_paragraph("")
+        else:
+            # Q&A audit trail
+            if answered:
+                doc.add_heading("Answered", level=2)
+                current_role = None
+                for q in answered:
+                    role = (q.get("target_role") or "General").replace("_", " ").title()
+                    if role != current_role:
+                        current_role = role
+                        p = doc.add_paragraph(role)
+                        p.runs[0].bold = True
+                        p.runs[0].font.size = Pt(10)
+                        p.runs[0].font.color.rgb = RGBColor(0x44, 0x44, 0x66)
+
+                    p_q = doc.add_paragraph()
+                    p_q.add_run("Q: ").bold = True
+                    p_q.add_run(q.get("question", ""))
+
+                    p_a = doc.add_paragraph()
+                    run_a = p_a.add_run("A: ")
+                    run_a.bold = True
+                    run_a.font.color.rgb = RGBColor(0x16, 0xa3, 0x4a)
+                    answered_by = q.get("answered_by", "")
+                    prefix = f"({answered_by}) " if answered_by else ""
+                    p_a.add_run(f"{prefix}{q.get('answer', '')}")
+                    doc.add_paragraph("")
+
+            if outstanding:
+                doc.add_heading("Outstanding", level=2)
+                current_role = None
+                for q in outstanding:
+                    role = (q.get("target_role") or "General").replace("_", " ").title()
+                    if role != current_role:
+                        current_role = role
+                        p = doc.add_paragraph(role)
+                        p.runs[0].bold = True
+                        p.runs[0].font.size = Pt(10)
+                        p.runs[0].font.color.rgb = RGBColor(0x44, 0x44, 0x66)
+
+                    p_q = doc.add_paragraph()
+                    run_label = p_q.add_run("Q: ")
+                    run_label.bold = True
+                    p_q.add_run(q.get("question", ""))
+
+                    p_out = doc.add_paragraph()
+                    run_out = p_out.add_run("  [ OUTSTANDING ]")
+                    run_out.italic = True
+                    run_out.font.color.rgb = RGBColor(0xd9, 0x77, 0x06)
+                    run_out.font.size = Pt(9)
+                    doc.add_paragraph("")
 
         doc.add_page_break()
+
+    # ─── Render sections ────────────────────────────────────
+    if has_any_questions and not has_any_answers:
+        _render_stakeholder_section("Stakeholder Interview Questions")
+
+    for agent_key, section_title in main_sections:
+        agent_data = agent_outputs.get(agent_key, {})
+        doc.add_heading(section_title, level=1)
+        if not agent_data:
+            doc.add_paragraph("(No data from this agent.)")
+        else:
+            filtered = {k: v for k, v in agent_data.items() if k not in SKIP_KEYS and v}
+            _render_dict(doc, filtered, depth=2)
+        doc.add_page_break()
+
+    if has_any_questions and has_any_answers:
+        _render_stakeholder_section("Stakeholder Interviews — Q&A Record")
 
     # ─── Annotated Bibliography ─────────────────────────────
     all_citations = _collect_all_citations(agent_outputs)
@@ -365,7 +467,6 @@ def generate_marketing_plan(
     run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
     run.italic = True
 
-    # Add page numbers and save
     _add_page_numbers(doc)
     doc.save(output_path)
     return output_path

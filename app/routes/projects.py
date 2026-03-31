@@ -328,6 +328,21 @@ async def generate_docx(project_id: int, run_id: int = Form(...), db: Session = 
         if ar.output_json:
             agent_outputs[ar.agent_name.value] = ar.output_json
 
+    # Gather stakeholder questions for dynamic section positioning
+    stakeholder_qs = db.query(StakeholderQuestion).filter(
+        StakeholderQuestion.project_id == project_id,
+    ).order_by(StakeholderQuestion.target_role, StakeholderQuestion.created_at).all()
+    stakeholder_data = [
+        {
+            "question": q.question,
+            "purpose": q.purpose,
+            "target_role": q.target_role,
+            "answer": q.answer,
+            "answered_by": q.answered_by,
+        }
+        for q in stakeholder_qs
+    ]
+
     # Generate DOCX
     output_dir = PROJECTS_DIR / str(project_id) / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -340,6 +355,7 @@ async def generate_docx(project_id: int, run_id: int = Form(...), db: Session = 
         project_type=project.project_type.value,
         agent_outputs=agent_outputs,
         output_path=output_path,
+        stakeholder_questions=stakeholder_data,
     )
 
     # Record in database
