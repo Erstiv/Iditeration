@@ -12,12 +12,13 @@ from app.database import get_db
 from app.models import (
     Project, ProjectType, CrewRun, AgentRun, AgentName,
     BibleEntry, BibleScope, BibleCategory, StakeholderQuestion,
-    OutputDocument, RunStatus, AgentNote,
+    OutputDocument, RunStatus, AgentNote, ResearchBrief,
 )
 from app.crews.marketing_bible import MarketingBibleTool
 from app.output.docx_generator import generate_marketing_plan, generate_stakeholder_questions_docx, generate_single_agent_docx
 from app.output.html_renderer import render_agent_output_html, render_agent_output_editable_html
 from app.crews.crew_runner import create_crew_run, execute_crew_run, get_crew_run_status, DEFAULT_AGENT_ORDER, rerun_single_agent, continue_crew_run, AGENT_CLASS_MAP, process_stakeholder_answers
+from app.crews.agents.research_brief_agent import run_research_brief
 from app.config import PROJECTS_DIR, GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
@@ -176,6 +177,9 @@ async def project_detail(request: Request, project_id: int, db: Session = Depend
     output_docs = db.query(OutputDocument).filter(
         OutputDocument.project_id == project_id
     ).order_by(OutputDocument.generated_at.desc()).all()
+    research_briefs = db.query(ResearchBrief).filter(
+        ResearchBrief.project_id == project_id
+    ).order_by(ResearchBrief.created_at.desc()).all()
 
     return templates.TemplateResponse(request, "project.html", {
         "project": project,
@@ -183,6 +187,7 @@ async def project_detail(request: Request, project_id: int, db: Session = Depend
         "product_entries": product_entries,
         "stakeholder_questions": stakeholder_qs,
         "output_docs": output_docs,
+        "research_briefs": research_briefs,
         "agent_names": [a.value for a in AgentName],
     })
 
@@ -873,3 +878,91 @@ async def process_stakeholder(
 
     background_tasks.add_task(process_stakeholder_answers, db, project_id)
     return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+# ─── Research Briefs ─────────────────────────────────────────
+
+@router.post("/projects/{project_id}/research-brief")
+async def create_research_brief(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    question: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Start a new research brief query."""
+    brief = ResearchBrief(project_id=project_id, question=question.strip())
+    db.add(brief)
+    db.commit()
+    db.refresh(brief)
+    background_tasks.add_task(run_research_brief, db, brief.id)
+    return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+@router.get("/api/projects/{project_id}/research-briefs/{brief_id}", response_class=HTMLResponse)
+async def get_research_brief(
+    request: Request,
+    project_id: int,
+    brief_id: int,
+    db: Session = Depends(get_db),
+):
+    """Return HTML fragment for a research brief result."""
+    brief = db.query(ResearchBrief).filter(
+        ResearchBrief.id == brief_id,
+        ResearchBrief.project_id == project_id,
+    ).first()
+    if not brief:
+        return HTMLResponse('<p class="text-dim text-sm">Brief not found.</p>')
+    return templates.TemplateResponse(request, "partials/_research_brief_result.html", {
+        "brief": brief,
+        "project_id": project_id,
+    })
+
+
+@router.post("/api/projects/{project_id}/research-briefs/{brief_id}/save-to-bible",
+             response_class=HTMLResponse)
+async def save_brief_to_bible(
+    request: Request,
+    project_id: int,
+    brief_id: int,
+    category: str = Form("research_findings"),
+    db: Session = Depends(get_db),
+):
+    """Save a research brief's key findings to the Product Bible."""
+    brief = db.query(ResearchBrief).filter(
+        ResearchBrief.id == brief_id,
+        ResearchBrief.project_id == project_id,
+    ).first()
+    if not brief or not brief.output_json:
+        return HTMLResponse('<span class="badge badge-failed">Not ready</span>')
+
+    output = brief.output_json
+    question = output.get("question", brief.question)
+    summary = output.get("summary", "")
+    implications = output.get("implications_for_marketing", "")
+
+    content = summary
+    if implications:
+        content += f"\n\n### Marketing Implications\n{implications}"
+
+    # Include key findings if present
+    findings = output.get("key_findings", [])
+    if findings:
+        content += "\n\n### Key Findings\n"
+        for f in findings[:5]:
+            if isinstance(f, dict):
+                conf = f.get("confidence", "")
+                content += f"- [{conf.upper()}] {f.get('finding', '')}\n"
+
+    bible = MarketingBibleTool(db, project_id)
+    try:
+        cat = BibleCategory(category)
+    except ValueError:
+        cat = BibleCategory.RESEARCH_FINDINGS
+
+    bible.add_entry(
+        category=cat,
+        title=f"Research Brief: {question[:80]}",
+        content=content.strip(),
+        source="research_brief",
+    )
+    return HTMLResponse('<span class="badge badge-completed">Saved to Bible ✓</span>')

@@ -105,6 +105,46 @@
             <p class="text-dim text-sm">Complete an analysis run, then generate a DOCX.</p>
             {% endif %}
         </div>
+        <!-- Research Briefs -->
+        <div class="card">
+            <h2>Research Briefs</h2>
+            <p class="text-sm text-dim" style="margin-bottom: 0.75rem;">
+                Ask any research question — academic literature, market data, neuroscience, fandom behaviour, industry trends. Gemini searches and synthesises a structured brief.
+            </p>
+            <form action="/projects/{{ project.id }}/research-brief" method="post">
+                <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+                    <textarea name="question"
+                              placeholder="e.g. What does neuroscience research say about parasocial relationships in fandom communities?"
+                              style="flex: 1; min-height: 70px; font-size: 0.85rem;"
+                              required></textarea>
+                    <button type="submit" class="btn btn-primary btn-sm" style="margin-top: 0.1rem;">Research</button>
+                </div>
+            </form>
+
+            {% if research_briefs %}
+            <div style="margin-top: 1rem;">
+                {% for brief in research_briefs %}
+                <div style="padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+                        <div style="flex: 1; min-width: 0;">
+                            <p class="text-sm" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ brief.question }}">{{ brief.question }}</p>
+                            <span class="text-dim text-sm">{{ brief.created_at.strftime('%b %d %H:%M') }}</span>
+                            {% if brief.cost_usd %}<span class="text-dim text-sm"> · ${{ "%.4f"|format(brief.cost_usd) }}</span>{% endif %}
+                        </div>
+                        <div style="display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0;">
+                            <span class="badge badge-{{ brief.status.value }}">{{ brief.status.value }}</span>
+                            <button class="btn btn-outline btn-sm"
+                                    onclick="let el=document.getElementById('brief-{{ brief.id }}'); if(el.innerHTML && el.style.display!=='none'){el.style.display='none';this.textContent='View';}else{el.style.display='';if(!el.innerHTML){htmx.ajax('GET','/api/projects/{{ project.id }}/research-briefs/{{ brief.id }}',{target:el,swap:'innerHTML'});}this.textContent='Hide';}">
+                                View
+                            </button>
+                        </div>
+                    </div>
+                    <div id="brief-{{ brief.id }}" style="display: none; margin-top: 0.5rem;"></div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
     </div>
 
     <!-- Right Column: Knowledge Base & Stakeholders -->

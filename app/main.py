@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from app.database import init_db, SessionLocal
-from app.models import User, BibleEntry, BibleScope, AgentNote  # noqa: F401 — ensures table is registered
+from app.models import User, BibleEntry, BibleScope, AgentNote, ResearchBrief  # noqa: F401 — ensures table is registered
 from app.routes.projects import router as projects_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")

@@ -104,6 +104,7 @@ class Project(Base):
     crew_runs = relationship("CrewRun", back_populates="project")
     stakeholder_questions = relationship("StakeholderQuestion", back_populates="project")
     output_documents = relationship("OutputDocument", back_populates="project")
+    research_briefs = relationship("ResearchBrief", back_populates="project", order_by="ResearchBrief.created_at.desc()")
 
 
 # ─── Knowledge Base ─────────────────────────────────────────
@@ -229,6 +230,30 @@ class StakeholderQuestion(Base):
 # NOTE: ResearchCitation model removed — citations now live in agent output JSON
 # (sources_cited field). The research_citations table may still exist in DBs
 # but is no longer used or populated.
+
+
+# ─── Research Briefs ────────────────────────────────────────
+
+class ResearchBrief(Base):
+    """Standalone research query — user asks a question, Gemini searches and synthesises."""
+    __tablename__ = "research_briefs"
+
+    id = Column(Integer, primary_key=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    question = Column(Text, nullable=False)
+    status = Column(SQLEnum(RunStatus), default=RunStatus.PENDING)
+    output_json = Column(JSON, nullable=True)
+    output_raw = Column(Text, nullable=True)
+    model_used = Column(String(100), nullable=True)
+    input_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    cost_usd = Column(Float, default=0.0)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    project = relationship("Project", back_populates="research_briefs")
 
 
 # ─── Output Documents ──────────────────────────────────────

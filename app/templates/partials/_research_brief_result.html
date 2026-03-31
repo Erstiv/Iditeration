@@ -1,0 +1,164 @@
+<div style="padding: 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;">
+
+    {% if brief.status.value == 'running' or brief.status.value == 'pending' %}
+    {# ── Auto-poll while processing ─────────────────────────── #}
+    <div hx-get="/api/projects/{{ project_id }}/research-briefs/{{ brief.id }}"
+         hx-trigger="every 4s"
+         hx-swap="outerHTML"
+         style="text-align: center; padding: 2rem 0;">
+        <p class="text-dim text-sm">🔍 Searching and synthesising... this takes 20–40 seconds.</p>
+        <p class="text-sm" style="margin-top: 0.5rem; color: var(--accent);">{{ brief.question }}</p>
+    </div>
+
+    {% elif brief.status.value == 'failed' %}
+    <p style="color: var(--red);" class="text-sm"><strong>Research failed:</strong> {{ brief.error_message }}</p>
+
+    {% elif brief.output_json %}
+    {% set out = brief.output_json %}
+
+    {# ── Header ──────────────────────────────────────────────── #}
+    <div style="margin-bottom: 1rem;">
+        <p class="text-sm text-dim" style="margin-bottom: 0.25rem;">Research Brief</p>
+        <h3 style="font-size: 1rem; line-height: 1.4;">{{ out.question or brief.question }}</h3>
+        {% if brief.cost_usd %}
+        <span class="text-dim text-sm">${{ "%.4f"|format(brief.cost_usd) }} · {{ "{:,}".format(brief.input_tokens + brief.output_tokens) }} tokens</span>
+        {% endif %}
+    </div>
+
+    {# ── Summary ─────────────────────────────────────────────── #}
+    {% if out.summary %}
+    <div style="margin-bottom: 1.25rem;">
+        <p class="text-sm" style="font-weight: 600; margin-bottom: 0.4rem;">Summary</p>
+        <div class="text-sm" style="line-height: 1.65; white-space: pre-wrap;">{{ out.summary }}</div>
+    </div>
+    {% endif %}
+
+    {# ── Key Findings ─────────────────────────────────────────── #}
+    {% if out.key_findings %}
+    <div style="margin-bottom: 1.25rem;">
+        <p class="text-sm" style="font-weight: 600; margin-bottom: 0.5rem;">Key Findings</p>
+        {% for f in out.key_findings %}
+        {% if f is mapping %}
+        <div style="padding: 0.6rem 0.75rem; border-left: 3px solid {% if f.confidence == 'high' %}var(--accent){% elif f.confidence == 'medium' %}#f59e0b{% else %}var(--border){% endif %}; margin-bottom: 0.5rem; background: rgba(255,255,255,0.02); border-radius: 0 4px 4px 0;">
+            <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+                <span class="badge badge-{% if f.confidence == 'high' %}completed{% elif f.confidence == 'medium' %}running{% else %}pending{% endif %}" style="font-size: 0.65rem; flex-shrink: 0; margin-top: 0.1rem;">{{ f.confidence or '?' }}</span>
+                <div>
+                    <p class="text-sm" style="font-weight: 500;">{{ f.finding }}</p>
+                    {% if f.explanation %}
+                    <p class="text-sm text-dim" style="margin-top: 0.2rem;">{{ f.explanation }}</p>
+                    {% endif %}
+                    {% if f.source_hint %}
+                    <p class="text-sm text-dim" style="margin-top: 0.15rem; font-style: italic;">Source: {{ f.source_hint }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ── Academic & Industry perspectives ──────────────────── #}
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+        {% if out.academic_perspective %}
+        <div>
+            <p class="text-sm" style="font-weight: 600; margin-bottom: 0.35rem;">📚 Academic Perspective</p>
+            <p class="text-sm text-dim" style="line-height: 1.6;">{{ out.academic_perspective }}</p>
+        </div>
+        {% endif %}
+        {% if out.industry_perspective %}
+        <div>
+            <p class="text-sm" style="font-weight: 600; margin-bottom: 0.35rem;">🏢 Industry Perspective</p>
+            <p class="text-sm text-dim" style="line-height: 1.6;">{{ out.industry_perspective }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ── Data Points ──────────────────────────────────────────── #}
+    {% if out.data_points %}
+    <div style="margin-bottom: 1.25rem;">
+        <p class="text-sm" style="font-weight: 600; margin-bottom: 0.4rem;">📊 Data Points</p>
+        {% for dp in out.data_points %}
+        {% if dp is mapping %}
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <span class="text-sm" style="color: var(--accent); font-weight: 600;">→</span>
+            <span class="text-sm"><strong>{{ dp.stat }}</strong>
+            {% if dp.source %}<span class="text-dim"> — {{ dp.source }}</span>{% endif %}</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ── Marketing Implications ───────────────────────────────── #}
+    {% if out.implications_for_marketing %}
+    <div style="margin-bottom: 1.25rem; padding: 0.75rem; background: rgba(99,102,241,0.08); border-radius: 6px; border: 1px solid rgba(99,102,241,0.2);">
+        <p class="text-sm" style="font-weight: 600; margin-bottom: 0.35rem;">🎯 Marketing Implications</p>
+        <div class="text-sm" style="line-height: 1.65; white-space: pre-wrap;">{{ out.implications_for_marketing }}</div>
+    </div>
+    {% endif %}
+
+    {# ── Caveats ──────────────────────────────────────────────── #}
+    {% if out.caveats_and_limitations %}
+    <div style="margin-bottom: 1.25rem;">
+        <p class="text-sm" style="font-weight: 600; margin-bottom: 0.35rem;">⚠ Caveats & Limitations</p>
+        <p class="text-sm text-dim" style="line-height: 1.6;">{{ out.caveats_and_limitations }}</p>
+    </div>
+    {% endif %}
+
+    {# ── Related Topics ───────────────────────────────────────── #}
+    {% if out.related_topics %}
+    <div style="margin-bottom: 1.25rem;">
+        <p class="text-sm" style="font-weight: 600; margin-bottom: 0.4rem;">🔗 Related Topics</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+            {% for topic in out.related_topics %}
+            <span class="badge badge-pending" style="font-size: 0.75rem;">{{ topic }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Sources ──────────────────────────────────────────────── #}
+    {% if out.sources_cited %}
+    <details style="margin-bottom: 1.25rem;">
+        <summary class="text-sm" style="cursor: pointer; color: var(--accent);">
+            Sources ({{ out.sources_cited|length }})
+        </summary>
+        <div style="margin-top: 0.5rem;">
+            {% for s in out.sources_cited %}
+            {% if s is mapping %}
+            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(42,42,69,0.3);">
+                <a href="{{ s.url or '#' }}" target="_blank" class="text-sm" style="color: var(--accent);">{{ s.title or s.url }}</a>
+                {% if s.finding %}
+                <p class="text-sm text-dim" style="margin-top: 0.1rem;">{{ s.finding }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+
+    {# ── Save to Bible ─────────────────────────────────────────── #}
+    <div style="padding-top: 0.75rem; border-top: 1px solid var(--border); display: flex; gap: 0.75rem; align-items: center;">
+        <form hx-post="/api/projects/{{ project_id }}/research-briefs/{{ brief.id }}/save-to-bible"
+              hx-target="#save-result-{{ brief.id }}"
+              hx-swap="innerHTML"
+              style="display: flex; gap: 0.5rem; align-items: center;">
+            <select name="category" style="font-size: 0.8rem; padding: 0.25rem 0.4rem;">
+                <option value="research_findings">Research Findings</option>
+                <option value="audience_segments">Audience Segments</option>
+                <option value="competitive_data">Competitive Data</option>
+                <option value="social_data">Social Data</option>
+                <option value="strategy">Strategy</option>
+            </select>
+            <button type="submit" class="btn btn-outline btn-sm">Save to Product Bible</button>
+        </form>
+        <span id="save-result-{{ brief.id }}"></span>
+    </div>
+
+    {% else %}
+    <p class="text-dim text-sm">No output available yet.</p>
+    {% endif %}
+
+</div>
