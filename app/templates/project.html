@@ -77,7 +77,7 @@
                     {% set char = AGENT_CHARACTERS.get(agent, {}) %}
                     <label style="display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer; white-space: nowrap;" title="{{ char.catalog or '' }}">
                         <input type="checkbox" name="agents" value="{{ agent }}">
-                        {{ char.name or agent.replace('_', ' ').title() }}
+                        {{ char.name or agent.replace('_', ' ').title() }} ({{ char.role or agent.replace('_', ' ').title() }})
                     </label>
                     {% endfor %}
                 </div>

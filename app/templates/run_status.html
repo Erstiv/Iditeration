@@ -33,7 +33,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         {% set char = AGENT_CHARACTERS.get(agent.name, {}) %}
-                        <strong class="text-sm">{{ agent.sequence + 1 }}. {{ char.name or agent.name.replace('_', ' ').title() }}</strong>
+                        <strong class="text-sm" title="{{ char.catalog or '' }}">{{ agent.sequence + 1 }}. {{ char.name or agent.name.replace('_', ' ').title() }} ({{ char.role or agent.name.replace('_', ' ').title() }})</strong>
                         <span class="text-dim text-sm" style="margin-left: 0.4rem;">· {{ char.catalog or '' }}</span>
                         {% if agent.model %}
                         <span class="text-dim text-sm" style="margin-left: 0.5rem;">({{ agent.model }})</span>
