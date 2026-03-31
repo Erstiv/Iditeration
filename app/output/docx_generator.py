@@ -12,58 +12,83 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 
+def _make_field_run(p_element, field_code: str):
+    """Insert a Word field using fldChar BEGIN/SEPARATE/END pattern.
+
+    This format is compatible with Microsoft Word, Apple Pages, Google Docs,
+    and LibreOffice — unlike the simpler fldSimple approach.
+    """
+    def _rpr():
+        rpr = OxmlElement("w:rPr")
+        sz = OxmlElement("w:sz")
+        sz.set(qn("w:val"), "16")  # 8pt
+        rpr.append(sz)
+        color = OxmlElement("w:color")
+        color.set(qn("w:val"), "999999")
+        rpr.append(color)
+        return rpr
+
+    # BEGIN
+    r_begin = OxmlElement("w:r")
+    r_begin.append(_rpr())
+    fld_begin = OxmlElement("w:fldChar")
+    fld_begin.set(qn("w:fldCharType"), "begin")
+    r_begin.append(fld_begin)
+    p_element.append(r_begin)
+
+    # INSTRUCTION
+    r_instr = OxmlElement("w:r")
+    r_instr.append(_rpr())
+    instr_text = OxmlElement("w:instrText")
+    instr_text.set(qn("xml:space"), "preserve")
+    instr_text.text = f" {field_code} "
+    r_instr.append(instr_text)
+    p_element.append(r_instr)
+
+    # SEPARATE
+    r_sep = OxmlElement("w:r")
+    r_sep.append(_rpr())
+    fld_sep = OxmlElement("w:fldChar")
+    fld_sep.set(qn("w:fldCharType"), "separate")
+    r_sep.append(fld_sep)
+    p_element.append(r_sep)
+
+    # DEFAULT TEXT (shown before fields are updated)
+    r_default = OxmlElement("w:r")
+    r_default.append(_rpr())
+    t = OxmlElement("w:t")
+    t.text = "1"
+    r_default.append(t)
+    p_element.append(r_default)
+
+    # END
+    r_end = OxmlElement("w:r")
+    r_end.append(_rpr())
+    fld_end = OxmlElement("w:fldChar")
+    fld_end.set(qn("w:fldCharType"), "end")
+    r_end.append(fld_end)
+    p_element.append(r_end)
+
+
 def _add_page_numbers(doc: Document):
-    """Add centered page numbers to the document footer."""
+    """Add centered 'Page X of Y' to the document footer."""
     for section in doc.sections:
         footer = section.footer
         footer.is_linked_to_previous = False
         p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-        # "Page X of Y" using Word field codes
         run1 = p.add_run("Page ")
         run1.font.size = Pt(8)
         run1.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
 
-        # PAGE field
-        fld_page = OxmlElement("w:fldSimple")
-        fld_page.set(qn("w:instr"), "PAGE")
-        run_page = OxmlElement("w:r")
-        rpr = OxmlElement("w:rPr")
-        sz = OxmlElement("w:sz")
-        sz.set(qn("w:val"), "16")
-        rpr.append(sz)
-        color = OxmlElement("w:color")
-        color.set(qn("w:val"), "999999")
-        rpr.append(color)
-        run_page.append(rpr)
-        run_page_t = OxmlElement("w:t")
-        run_page_t.text = "1"
-        run_page.append(run_page_t)
-        fld_page.append(run_page)
-        p._element.append(fld_page)
+        _make_field_run(p._element, "PAGE")
 
         run2 = p.add_run(" of ")
         run2.font.size = Pt(8)
         run2.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
 
-        # NUMPAGES field
-        fld_total = OxmlElement("w:fldSimple")
-        fld_total.set(qn("w:instr"), "NUMPAGES")
-        run_total = OxmlElement("w:r")
-        rpr2 = OxmlElement("w:rPr")
-        sz2 = OxmlElement("w:sz")
-        sz2.set(qn("w:val"), "16")
-        rpr2.append(sz2)
-        color2 = OxmlElement("w:color")
-        color2.set(qn("w:val"), "999999")
-        rpr2.append(color2)
-        run_total.append(rpr2)
-        run_total_t = OxmlElement("w:t")
-        run_total_t.text = "1"
-        run_total.append(run_total_t)
-        fld_total.append(run_total)
-        p._element.append(fld_total)
+        _make_field_run(p._element, "NUMPAGES")
 
 
 # ─── Agent display order and section titles ────────────────
