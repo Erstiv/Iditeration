@@ -17,7 +17,7 @@ from app.models import (
 from app.crews.marketing_bible import MarketingBibleTool
 from app.output.docx_generator import generate_marketing_plan, generate_stakeholder_questions_docx, generate_single_agent_docx
 from app.output.html_renderer import render_agent_output_html, render_agent_output_editable_html
-from app.crews.crew_runner import create_crew_run, execute_crew_run, get_crew_run_status, DEFAULT_AGENT_ORDER, rerun_single_agent, continue_crew_run, AGENT_CLASS_MAP
+from app.crews.crew_runner import create_crew_run, execute_crew_run, get_crew_run_status, DEFAULT_AGENT_ORDER, rerun_single_agent, continue_crew_run, AGENT_CLASS_MAP, process_stakeholder_answers
 from app.config import PROJECTS_DIR, GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ async def create_project(
     distribution: str = Form(""),
     # Research options
     auto_research: str = Form(None),
-    generate_questions: str = Form(None),
+    generate_questions: str = Form(None),  # Legacy, kept for backward compat
     full_pipeline: str = Form(None),
     db: Session = Depends(get_db),
 ):
@@ -854,4 +854,22 @@ async def answer_stakeholder_question(
         sq.answered_by = answered_by
         sq.answered_at = datetime.now(timezone.utc)
         db.commit()
+    return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+
+@router.post("/projects/{project_id}/stakeholder/process")
+async def process_stakeholder(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Process answered stakeholder questions — writes findings to Product Bible."""
+    answered = db.query(StakeholderQuestion).filter(
+        StakeholderQuestion.project_id == project_id,
+        StakeholderQuestion.answer.isnot(None),
+    ).count()
+    if answered == 0:
+        return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+    background_tasks.add_task(process_stakeholder_answers, db, project_id)
     return RedirectResponse(url=f"/projects/{project_id}", status_code=303)

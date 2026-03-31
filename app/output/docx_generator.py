@@ -100,6 +100,7 @@ AGENT_SECTIONS = [
     ("competitive_intelligence", "5. Competitive Landscape"),
     ("social_strategist", "6. Social Media Strategy"),
     ("creative_director", "7. Creative Brief & Campaign Deliverables"),
+    ("stakeholder_agent", "8. Stakeholder Interview Framework"),
 ]
 
 # Keys to skip (metadata, not content)
@@ -325,7 +326,7 @@ def generate_marketing_plan(
     for _, section_title in AGENT_SECTIONS:
         p = doc.add_paragraph(section_title)
         p.style = doc.styles["List Number"]
-    p = doc.add_paragraph("8. Annotated Bibliography")
+    p = doc.add_paragraph("9. Annotated Bibliography")
     p.style = doc.styles["List Number"]
     doc.add_page_break()
 

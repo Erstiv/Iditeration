@@ -161,32 +161,76 @@
             </details>
         </div>
 
-        <!-- Stakeholder Questions -->
+        <!-- Stakeholder Interviews -->
         <div class="card">
-            <h2>Stakeholder Questions <span class="text-dim text-sm">({{ stakeholder_questions|length }})</span></h2>
-            {% if stakeholder_questions %}
-            {% for sq in stakeholder_questions %}
-            <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(42,42,69,0.3);">
-                <p class="text-sm"><strong>{{ sq.question }}</strong></p>
-                <p class="text-sm text-dim">Role: {{ sq.target_role }} {% if sq.purpose %}| {{ sq.purpose[:80] }}{% endif %}</p>
-                {% if sq.answer %}
-                <p class="text-sm mt-1" style="background: var(--bg); padding: 0.5rem; border-radius: 4px;">
-                    <strong>{{ sq.answered_by or 'Stakeholder' }}:</strong> {{ sq.answer }}
-                </p>
-                {% else %}
-                <form action="/projects/{{ project.id }}/stakeholder/answer" method="post" class="mt-1">
-                    <input type="hidden" name="question_id" value="{{ sq.id }}">
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="text" name="answered_by" placeholder="Name" style="width: 120px;">
-                        <input type="text" name="answer" placeholder="Answer..." style="flex: 1;">
-                        <button type="submit" class="btn btn-outline" style="padding: 0.25rem 0.5rem;">Save</button>
-                    </div>
-                </form>
+            {% set answered_count = stakeholder_questions|selectattr('answer')|list|length %}
+            {% set total_count = stakeholder_questions|length %}
+            <h2>Stakeholder Interviews
+                {% if total_count > 0 %}
+                <span class="text-dim text-sm">({{ answered_count }}/{{ total_count }} answered)</span>
                 {% endif %}
-            </div>
-            {% endfor %}
+            </h2>
+
+            {% if stakeholder_questions %}
+                {# ── Progress bar ── #}
+                {% if total_count > 0 %}
+                <div style="background:var(--border);border-radius:4px;height:6px;margin-bottom:1rem;overflow:hidden;">
+                    <div style="background:var(--accent);height:100%;width:{{ (answered_count / total_count * 100)|int }}%;transition:width 0.3s;"></div>
+                </div>
+                {% endif %}
+
+                {# ── Group by role ── #}
+                {% set ns = namespace(current_role='') %}
+                {% for sq in stakeholder_questions|sort(attribute='target_role') %}
+                    {% if sq.target_role != ns.current_role %}
+                        {% set ns.current_role = sq.target_role %}
+                        <h3 class="mt-1" style="font-size:0.85rem;border-bottom:1px solid var(--border);padding-bottom:0.25rem;color:var(--accent);">
+                            {{ sq.target_role.replace('_', ' ').title() }}
+                        </h3>
+                    {% endif %}
+                    <div style="padding:0.4rem 0;border-bottom:1px solid rgba(42,42,69,0.2);">
+                        <p class="text-sm"><strong>{{ sq.question }}</strong></p>
+                        {% if sq.purpose %}
+                        <p class="text-sm text-dim" style="font-style:italic;margin-top:0.1rem;">{{ sq.purpose[:120] }}</p>
+                        {% endif %}
+                        {% if sq.answer %}
+                        <p class="text-sm mt-1" style="background:rgba(255,255,255,0.03);padding:0.5rem;border-radius:4px;border-left:3px solid var(--accent);">
+                            <strong>{{ sq.answered_by or 'Stakeholder' }}:</strong> {{ sq.answer }}
+                        </p>
+                        {% else %}
+                        <form action="/projects/{{ project.id }}/stakeholder/answer" method="post" class="mt-1">
+                            <input type="hidden" name="question_id" value="{{ sq.id }}">
+                            <div style="display:flex;gap:0.5rem;">
+                                <input type="text" name="answered_by" placeholder="Name" style="width:100px;font-size:0.8rem;">
+                                <input type="text" name="answer" placeholder="Answer..." style="flex:1;font-size:0.8rem;">
+                                <button type="submit" class="btn btn-outline" style="padding:0.2rem 0.5rem;font-size:0.75rem;">Save</button>
+                            </div>
+                        </form>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+                {# ── Process Answers button ── #}
+                {% if answered_count > 0 %}
+                <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+                    <form action="/projects/{{ project.id }}/stakeholder/process" method="post"
+                          onsubmit="return confirm('Process {{ answered_count }} answered question{{ 's' if answered_count > 1 else '' }}? This will analyze the answers and update the Product Bible with new insights.')">
+                        <button type="submit" class="btn btn-primary">
+                            Process {{ answered_count }} Answer{{ 's' if answered_count > 1 else '' }} &rarr; Update Product Bible
+                        </button>
+                    </form>
+                    <p class="text-dim text-sm" style="margin-top:0.4rem;">
+                        Runs the Stakeholder Agent to extract insights from answers and write them to the Product Bible.
+                        After processing, rerun relevant agents to incorporate the new information.
+                    </p>
+                </div>
+                {% endif %}
+
             {% else %}
-            <p class="text-dim text-sm">Run the Stakeholder Agent to generate interview questions.</p>
+            <p class="text-dim text-sm">
+                Stakeholder questions are generated automatically when you run the full pipeline.
+                The Stakeholder Agent analyzes all agent outputs to identify knowledge gaps.
+            </p>
             {% endif %}
         </div>
     </div>

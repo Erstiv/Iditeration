@@ -4,17 +4,20 @@ Mirrors Cassian's crew_runner.py pattern: agents run in sequence, each receiving
 the outputs of all prior agents as context.
 
 Execution order (default full run):
-  1. Intake Analyst
-  2. Behavioral Scientist  }  Phase 2: Research (could run in parallel later)
+  0. Research Agent         — Phase 1: Google Search grounding
+  1. Intake Analyst         — Phase 2: Product assessment
+  2. Behavioral Scientist   }  Phase 3: Research (could run in parallel later)
   3. Psychometrics Expert   }
-  4. Competitive Intelligence  }  Phase 3: Audit (could run in parallel later)
+  4. Competitive Intelligence  }  Phase 4: Audit (could run in parallel later)
   5. Social Strategist         }
-  6. Chief Strategist       — Phase 4: Strategy synthesis
-  7. Creative Director      — Phase 5: Creative execution
-  8. Stakeholder Agent      — Optional, can run standalone
+  6. Chief Strategist       — Phase 5: Strategy synthesis
+  7. Creative Director      — Phase 6: Creative execution
+  8. Stakeholder Agent      — Phase 7: Knowledge gap analysis & interview questions
 
 Agents 2+3 and 4+5 are logically parallel but run sequentially for simplicity.
-Can be parallelized later with asyncio if needed.
+Stakeholder Agent runs last, sees ALL outputs, and generates questions targeting
+knowledge gaps. After stakeholder interviews, Phase 2 processes answers back
+into the Product Bible.
 """
 import logging
 from datetime import datetime, timezone
@@ -30,11 +33,11 @@ from app.crews.agents.competitive_intelligence import CompetitiveIntelligenceAge
 from app.crews.agents.social_strategist import SocialStrategistAgent
 from app.crews.agents.chief_strategist import ChiefStrategistAgent
 from app.crews.agents.creative_director import CreativeDirectorAgent
-from app.crews.agents.stakeholder_agent import StakeholderAgent
+from app.crews.agents.stakeholder_agent import StakeholderAgent, StakeholderProcessAgent
 
 logger = logging.getLogger("idideration.crew_runner")
 
-# Default full pipeline order
+# Default full pipeline order (Stakeholder Agent runs last to analyze all outputs)
 DEFAULT_AGENT_ORDER = [
     AgentName.RESEARCH_AGENT,
     AgentName.INTAKE_ANALYST,
@@ -44,6 +47,7 @@ DEFAULT_AGENT_ORDER = [
     AgentName.SOCIAL_STRATEGIST,
     AgentName.CHIEF_STRATEGIST,
     AgentName.CREATIVE_DIRECTOR,
+    AgentName.STAKEHOLDER_AGENT,
 ]
 
 AGENT_CLASS_MAP = {
@@ -257,6 +261,56 @@ def continue_crew_run(db: Session, crew_run_id: int):
         crew_run.completed_at = datetime.now(timezone.utc)
         db.commit()
         raise
+
+
+def process_stakeholder_answers(db: Session, project_id: int):
+    """Run the Stakeholder Process Agent to ingest answers into the Product Bible.
+
+    Creates a standalone crew run with just the process agent, which reads
+    answered StakeholderQuestions and writes findings to the Product Bible.
+    """
+    from app.models import StakeholderQuestion
+
+    # Check there are actually answered questions
+    answered = db.query(StakeholderQuestion).filter(
+        StakeholderQuestion.project_id == project_id,
+        StakeholderQuestion.answer.isnot(None),
+    ).count()
+    if answered == 0:
+        logger.warning(f"No answered stakeholder questions for project {project_id}")
+        return
+
+    # Create a crew run for tracking
+    crew_run = CrewRun(
+        project_id=project_id,
+        status=RunStatus.RUNNING,
+        agents_to_run=["stakeholder_agent"],
+    )
+    db.add(crew_run)
+    db.flush()
+
+    agent_run = AgentRun(
+        crew_run_id=crew_run.id,
+        agent_name=AgentName.STAKEHOLDER_AGENT,
+        sequence_order=0,
+        status=RunStatus.PENDING,
+    )
+    db.add(agent_run)
+    db.commit()
+
+    try:
+        agent = StakeholderProcessAgent(db=db, project_id=project_id, agent_run=agent_run)
+        agent.run(prior_outputs={})
+        crew_run.status = RunStatus.COMPLETED
+        crew_run.completed_at = datetime.now(timezone.utc)
+        db.commit()
+        logger.info(f"Stakeholder answer processing completed for project {project_id}")
+    except Exception as e:
+        logger.error(f"Stakeholder answer processing failed: {e}")
+        crew_run.status = RunStatus.FAILED
+        crew_run.error_message = str(e)
+        crew_run.completed_at = datetime.now(timezone.utc)
+        db.commit()
 
 
 def get_crew_run_status(db: Session, crew_run_id: int) -> dict:

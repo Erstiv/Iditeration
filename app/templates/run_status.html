@@ -73,8 +73,8 @@
                         <button type="submit" class="btn btn-outline btn-sm">Export DOCX</button>
                     </form>
                     <button class="btn btn-outline btn-sm"
-                            onclick="let el=document.getElementById('chat-{{ agent.name }}'); if(el.innerHTML && el.style.display!=='none'){el.style.display='none';this.textContent='Ask / Refocus';}else{el.style.display='';if(!el.innerHTML){htmx.ajax('GET','/api/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/chat',{target:el,swap:'innerHTML'});}this.textContent='Hide Chat';}">
-                        Ask / Refocus
+                            onclick="let el=document.getElementById('chat-{{ agent.name }}'); if(el.innerHTML && el.style.display!=='none'){el.style.display='none';this.textContent='Ask / Guide';}else{el.style.display='';if(!el.innerHTML){htmx.ajax('GET','/api/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/chat',{target:el,swap:'innerHTML'});}this.textContent='Hide Chat';}">
+                        Ask / Guide
                     </button>
                     {% endif %}
                     <form action="/projects/{{ project.id }}/runs/{{ run_status.id }}/agents/{{ agent.name }}/rerun"

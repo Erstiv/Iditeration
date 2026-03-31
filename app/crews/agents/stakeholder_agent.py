@@ -16,15 +16,37 @@ class StakeholderAgent(BaseAgent):
     def _build_prompt(self, prior_outputs: dict[str, dict]) -> str:
         sections = []
 
+        # Product Bible context
+        sections.append(self.bible.to_prompt_text(BibleScope.GLOBAL))
         sections.append(self.bible.to_prompt_text(BibleScope.PROJECT))
 
-        if "intake_analyst" in prior_outputs:
-            sections.append("=== PRODUCT ASSESSMENT (from Intake Analyst) ===")
-            sections.append(json.dumps(prior_outputs["intake_analyst"], indent=2, default=str)[:25000])
+        # Pass ALL prior agent outputs — this agent runs last and needs to see everything
+        agent_labels = {
+            "research_agent": "Research Agent (External Research)",
+            "intake_analyst": "Intake Analyst (Product Assessment)",
+            "behavioral_scientist": "Behavioral Scientist (Behavioral Framework)",
+            "psychometrics_expert": "Psychometrics Expert (Audience Segments)",
+            "competitive_intelligence": "Competitive Intelligence (Competitor Landscape)",
+            "social_strategist": "Social Strategist (Platform & Content Strategy)",
+            "chief_strategist": "Chief Strategist (Grand Strategy)",
+            "creative_director": "Creative Director (Campaign Concepts)",
+        }
+        for agent_key, label in agent_labels.items():
+            if agent_key in prior_outputs:
+                sections.append(f"=== OUTPUT FROM: {label.upper()} ===")
+                sections.append(json.dumps(prior_outputs[agent_key], indent=2, default=str)[:20000])
+                sections.append(f"=== END {agent_key.upper()} ===\n")
 
-        sections.append("\n=== YOUR TASK ===")
-        sections.append("Generate stakeholder interview questions based on the product assessment.")
-        sections.append("Focus on questions whose answers can't be found through research.")
+        # One-time rerun guidance (if provided)
+        if self.agent_run.rerun_guidance:
+            sections.append("=== ONE-TIME INSTRUCTION (from user) ===")
+            sections.append(self.agent_run.rerun_guidance)
+            sections.append("=== END INSTRUCTION ===\n")
+
+        sections.append("=== YOUR TASK ===")
+        sections.append("Analyze ALL agent outputs above. Identify knowledge gaps — things agents had to assume, guess, or skip.")
+        sections.append("Generate targeted stakeholder interview questions that would fill those gaps.")
+        sections.append("Focus on insider knowledge that can't be found through external research.")
         sections.append("Return ONLY valid JSON.")
         return "\n\n".join(sections)
 
