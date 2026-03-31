@@ -38,7 +38,7 @@
         </p>
         <form action="/projects/{{ project_id }}/runs/{{ run_id }}/agents/{{ agent_name }}/rerun-guided"
               method="post"
-              onsubmit="return confirm('Rerun {{ agent_name|replace(\'_\', \' \')|title }} with these instructions? This will replace its current output.')">
+              onsubmit="return confirm('Rerun this agent with these instructions? This will replace its current output.')">
             <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
                 <textarea name="guidance"
                           placeholder="Be more specific about pricing strategy. Include concrete numbers and timelines."
@@ -57,7 +57,7 @@
         </p>
         <form action="/projects/{{ project_id }}/runs/{{ run_id }}/agents/{{ agent_name }}/refocus"
               method="post"
-              onsubmit="return confirm('Add directive and rerun {{ agent_name|replace(\'_\', \' \')|title }}? This will replace its current output.')">
+              onsubmit="return confirm('Add directive and rerun this agent? This will replace its current output.')">
             <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
                 <textarea name="directive"
                           placeholder="Focus more on TikTok, less on LinkedIn. Target Gen Z as the primary segment."
