@@ -52,9 +52,13 @@
                 {% if agent.error %}
                 <p class="text-sm" style="color: var(--red); margin-top: 0.25rem;">{{ agent.error[:200] }}</p>
                 {% endif %}
-                {% if agent.started_at and agent.completed_at %}
+                {% if agent.status == 'running' and agent.started_at %}
                 <p class="text-sm text-dim" style="margin-top: 0.15rem;">
-                    {{ agent.started_at[:19] }} &rarr; {{ agent.completed_at[:19] }}
+                    ⏱ <span id="timer-{{ agent.name }}" data-started="{{ agent.started_at }}">0s</span>
+                </p>
+                {% elif agent.duration_seconds is not none %}
+                <p class="text-sm text-dim" style="margin-top: 0.15rem;">
+                    ✓ {% if agent.duration_seconds >= 60 %}{{ (agent.duration_seconds // 60) }}m {{ (agent.duration_seconds % 60) }}s{% else %}{{ agent.duration_seconds }}s{% endif %}
                 </p>
                 {% endif %}
                 {% if agent.status == 'completed' or agent.status == 'failed' %}
@@ -128,8 +132,25 @@
 
 {% if run_status.status == 'running' %}
 <script>
-    // Auto-reload page every 5 seconds while running
-    setTimeout(function() { location.reload(); }, 5000);
+    function fmtElapsed(seconds) {
+        if (seconds < 60) return seconds + 's';
+        return Math.floor(seconds / 60) + 'm ' + (seconds % 60) + 's';
+    }
+
+    // Tick all running-agent timers every second
+    function tickTimers() {
+        document.querySelectorAll('[id^="timer-"]').forEach(function(el) {
+            var started = new Date(el.dataset.started);
+            var elapsed = Math.floor((Date.now() - started.getTime()) / 1000);
+            el.textContent = fmtElapsed(elapsed);
+        });
+    }
+    tickTimers();
+    var timerInterval = setInterval(tickTimers, 1000);
+
+    // Reload page every 6s to pick up newly started/completed agents
+    // (clears the interval first so timer doesn't fire on stale DOM)
+    setTimeout(function() { clearInterval(timerInterval); location.reload(); }, 6000);
 </script>
 {% endif %}
 {% endblock %}

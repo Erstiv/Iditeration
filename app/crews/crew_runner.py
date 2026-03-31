@@ -340,6 +340,10 @@ def get_crew_run_status(db: Session, crew_run_id: int) -> dict:
                 "cost_usd": ar.cost_usd or 0,
                 "started_at": ar.started_at.isoformat() if ar.started_at else None,
                 "completed_at": ar.completed_at.isoformat() if ar.completed_at else None,
+                "duration_seconds": (
+                    int((ar.completed_at - ar.started_at).total_seconds())
+                    if ar.started_at and ar.completed_at else None
+                ),
                 "error": ar.error_message,
             }
             for ar in crew_run.agent_runs
