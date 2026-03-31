@@ -109,13 +109,13 @@
         <div class="card">
             <h2>Research Briefs</h2>
             <p class="text-sm text-dim" style="margin-bottom: 0.75rem;">
-                Ask any research question — academic literature, market data, neuroscience, fandom behaviour, industry trends. Gemini searches and synthesises a structured brief.
+                Ask any research question — academic literature, market data, neuroscience, fandom behaviour, industry trends. One question per line to run multiple at once.
             </p>
             <form action="/projects/{{ project.id }}/research-brief" method="post">
                 <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
                     <textarea name="question"
-                              placeholder="e.g. What does neuroscience research say about parasocial relationships in fandom communities?"
-                              style="flex: 1; min-height: 70px; font-size: 0.85rem;"
+                              placeholder="One question per line — submit as many as you like at once.&#10;&#10;e.g. What drives parasocial relationships in fandom communities?&#10;Why is fandom particularly common with fantasy content?"
+                              style="flex: 1; min-height: 90px; font-size: 0.85rem;"
                               required></textarea>
                     <button type="submit" class="btn btn-primary btn-sm" style="margin-top: 0.1rem;">Research</button>
                 </div>

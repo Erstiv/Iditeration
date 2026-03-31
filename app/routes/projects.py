@@ -889,12 +889,16 @@ async def create_research_brief(
     question: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    """Start a new research brief query."""
-    brief = ResearchBrief(project_id=project_id, question=question.strip())
-    db.add(brief)
-    db.commit()
-    db.refresh(brief)
-    background_tasks.add_task(run_research_brief, db, brief.id)
+    """Start one or more research brief queries (one question per line)."""
+    questions = [q.strip() for q in question.splitlines() if q.strip()]
+    if not questions:
+        return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+    for q in questions:
+        brief = ResearchBrief(project_id=project_id, question=q)
+        db.add(brief)
+        db.commit()
+        db.refresh(brief)
+        background_tasks.add_task(run_research_brief, db, brief.id)
     return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
 
 
