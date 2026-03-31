@@ -122,7 +122,15 @@
             </form>
 
             {% if research_briefs %}
-            <div style="margin-top: 1rem;">
+            {% set completed_briefs = research_briefs | selectattr('status.value', 'equalto', 'completed') | list %}
+            {% if completed_briefs %}
+            <div style="margin-top: 0.75rem; margin-bottom: 0.25rem;">
+                <form action="/projects/{{ project.id }}/research-briefs/export-all-docx" method="post" style="display: inline;">
+                    <button type="submit" class="btn btn-outline btn-sm">Export All ({{ completed_briefs|length }}) as DOCX</button>
+                </form>
+            </div>
+            {% endif %}
+            <div style="margin-top: 0.5rem;">
                 {% for brief in research_briefs %}
                 <div style="padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">

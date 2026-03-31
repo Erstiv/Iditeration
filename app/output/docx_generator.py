@@ -428,6 +428,167 @@ def generate_single_agent_docx(
     return output_path
 
 
+def generate_research_briefs_docx(
+    project_name: str,
+    briefs: list[dict],
+    output_path: str,
+) -> str:
+    """Generate a DOCX containing one or more research briefs.
+
+    Each brief is a dict with keys: question, output_json, cost_usd, created_at.
+    """
+    doc = Document()
+    _setup_styles(doc)
+
+    # ─── Cover Page ─────────────────────────────────────────
+    doc.add_paragraph("")
+    doc.add_paragraph("")
+    title = doc.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = title.add_run(project_name.upper())
+    run.font.size = Pt(30)
+    run.font.color.rgb = RGBColor(0x1A, 0x1A, 0x2E)
+    run.bold = True
+
+    subtitle = doc.add_paragraph()
+    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = subtitle.add_run("Research Briefs")
+    run.font.size = Pt(18)
+    run.font.color.rgb = RGBColor(0x6C, 0x6C, 0x80)
+
+    meta = doc.add_paragraph()
+    meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = meta.add_run(f"Generated {datetime.now().strftime('%B %d, %Y')}")
+    run.font.size = Pt(11)
+    run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+    run.italic = True
+    meta.add_run(f"\n{len(briefs)} brief{'s' if len(briefs) != 1 else ''}")
+
+    doc.add_page_break()
+
+    # ─── Table of Contents ──────────────────────────────────
+    if len(briefs) > 1:
+        doc.add_heading("Contents", level=1)
+        for i, b in enumerate(briefs, 1):
+            q = b.get("question", "Untitled")
+            p = doc.add_paragraph(f"{i}. {q[:120]}{'...' if len(q) > 120 else ''}")
+            p.style = doc.styles["List Number"]
+        doc.add_page_break()
+
+    # ─── Render each brief ──────────────────────────────────
+    for i, b in enumerate(briefs, 1):
+        question = b.get("question", "Untitled")
+        out = b.get("output_json") or {}
+        created = b.get("created_at", "")
+        cost = b.get("cost_usd", 0)
+
+        # Section header
+        doc.add_heading(f"{'Brief ' + str(i) + ': ' if len(briefs) > 1 else ''}{question}", level=1)
+
+        # Meta line
+        meta_parts = []
+        if created:
+            meta_parts.append(str(created)[:16])
+        if cost:
+            meta_parts.append(f"${cost:.4f}")
+        if meta_parts:
+            p = doc.add_paragraph(" · ".join(meta_parts))
+            p.runs[0].font.size = Pt(9)
+            p.runs[0].font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+            p.runs[0].italic = True
+
+        if not out:
+            doc.add_paragraph("(No output available.)")
+            doc.add_page_break()
+            continue
+
+        doc.add_paragraph("")
+
+        # Summary
+        if out.get("summary"):
+            doc.add_heading("Summary", level=2)
+            doc.add_paragraph(out["summary"])
+
+        # Key Findings
+        if out.get("key_findings"):
+            doc.add_heading("Key Findings", level=2)
+            for f in out["key_findings"]:
+                if not isinstance(f, dict):
+                    continue
+                conf = f.get("confidence", "").upper()
+                finding = f.get("finding", "")
+                explanation = f.get("explanation", "")
+                source_hint = f.get("source_hint", "")
+                p = doc.add_paragraph(style="List Bullet")
+                run = p.add_run(f"[{conf}] " if conf else "")
+                run.bold = True
+                run.font.color.rgb = (
+                    RGBColor(0x16, 0xa3, 0x4a) if conf == "HIGH" else
+                    RGBColor(0xd9, 0x77, 0x06) if conf == "MEDIUM" else
+                    RGBColor(0x99, 0x99, 0x99)
+                )
+                p.add_run(finding)
+                if explanation:
+                    p2 = doc.add_paragraph(f"    {explanation}")
+                    p2.runs[0].font.size = Pt(9)
+                    p2.runs[0].font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+                if source_hint:
+                    p3 = doc.add_paragraph(f"    Source: {source_hint}")
+                    p3.runs[0].font.size = Pt(9)
+                    p3.runs[0].italic = True
+                    p3.runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+
+        # Academic & Industry perspectives
+        if out.get("academic_perspective"):
+            doc.add_heading("Academic Perspective", level=2)
+            doc.add_paragraph(out["academic_perspective"])
+
+        if out.get("industry_perspective"):
+            doc.add_heading("Industry Perspective", level=2)
+            doc.add_paragraph(out["industry_perspective"])
+
+        # Data Points
+        if out.get("data_points"):
+            doc.add_heading("Data Points", level=2)
+            for dp in out["data_points"]:
+                if not isinstance(dp, dict):
+                    continue
+                p = doc.add_paragraph(style="List Bullet")
+                run = p.add_run(dp.get("stat", ""))
+                run.bold = True
+                if dp.get("source"):
+                    p.add_run(f" — {dp['source']}")
+
+        # Marketing Implications
+        if out.get("implications_for_marketing"):
+            doc.add_heading("Marketing Implications", level=2)
+            doc.add_paragraph(out["implications_for_marketing"])
+
+        # Caveats
+        if out.get("caveats_and_limitations"):
+            doc.add_heading("Caveats & Limitations", level=2)
+            doc.add_paragraph(out["caveats_and_limitations"])
+
+        # Related Topics
+        if out.get("related_topics"):
+            doc.add_heading("Related Topics", level=2)
+            for t in out["related_topics"]:
+                doc.add_paragraph(str(t), style="List Bullet")
+
+        # Sources
+        sources = out.get("sources_cited", [])
+        if sources:
+            doc.add_heading("Sources", level=2)
+            _render_bibliography(doc, [s for s in sources if isinstance(s, dict)])
+
+        if i < len(briefs):
+            doc.add_page_break()
+
+    _add_page_numbers(doc)
+    doc.save(output_path)
+    return output_path
+
+
 def _setup_styles(doc: Document):
     """Configure document styles."""
     style = doc.styles["Normal"]

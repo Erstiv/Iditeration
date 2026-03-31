@@ -15,7 +15,7 @@ from app.models import (
     OutputDocument, RunStatus, AgentNote, ResearchBrief,
 )
 from app.crews.marketing_bible import MarketingBibleTool
-from app.output.docx_generator import generate_marketing_plan, generate_stakeholder_questions_docx, generate_single_agent_docx
+from app.output.docx_generator import generate_marketing_plan, generate_stakeholder_questions_docx, generate_single_agent_docx, generate_research_briefs_docx
 from app.output.html_renderer import render_agent_output_html, render_agent_output_editable_html
 from app.crews.crew_runner import create_crew_run, execute_crew_run, get_crew_run_status, DEFAULT_AGENT_ORDER, rerun_single_agent, continue_crew_run, AGENT_CLASS_MAP, process_stakeholder_answers
 from app.crews.agents.research_brief_agent import run_research_brief
@@ -970,3 +970,103 @@ async def save_brief_to_bible(
         source="research_brief",
     )
     return HTMLResponse('<span class="badge badge-completed">Saved to Bible ✓</span>')
+
+
+@router.post("/projects/{project_id}/research-briefs/{brief_id}/export-docx")
+async def export_research_brief_docx(
+    project_id: int,
+    brief_id: int,
+    db: Session = Depends(get_db),
+):
+    """Export a single research brief as DOCX."""
+    brief = db.query(ResearchBrief).filter(
+        ResearchBrief.id == brief_id,
+        ResearchBrief.project_id == project_id,
+    ).first()
+    if not brief or not brief.output_json:
+        return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    project_name = project.name if project else "Project"
+
+    output_dir = PROJECTS_DIR / str(project_id)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"research_brief_{brief_id}_{timestamp}.docx"
+    output_path = str(output_dir / filename)
+
+    generate_research_briefs_docx(
+        project_name=project_name,
+        briefs=[{
+            "question": brief.question,
+            "output_json": brief.output_json,
+            "cost_usd": brief.cost_usd,
+            "created_at": brief.created_at.strftime("%b %d, %Y %H:%M") if brief.created_at else "",
+        }],
+        output_path=output_path,
+    )
+
+    doc_record = OutputDocument(
+        project_id=project_id,
+        doc_type="research_brief",
+        file_path=output_path,
+        file_name=filename,
+    )
+    db.add(doc_record)
+    db.commit()
+
+    return FileResponse(
+        path=output_path,
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+
+@router.post("/projects/{project_id}/research-briefs/export-all-docx")
+async def export_all_research_briefs_docx(
+    project_id: int,
+    db: Session = Depends(get_db),
+):
+    """Export all completed research briefs for a project as a single DOCX."""
+    briefs = db.query(ResearchBrief).filter(
+        ResearchBrief.project_id == project_id,
+        ResearchBrief.status == RunStatus.COMPLETED,
+    ).order_by(ResearchBrief.created_at).all()
+
+    if not briefs:
+        return RedirectResponse(url=f"/projects/{project_id}", status_code=303)
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    project_name = project.name if project else "Project"
+
+    output_dir = PROJECTS_DIR / str(project_id)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"research_briefs_all_{timestamp}.docx"
+    output_path = str(output_dir / filename)
+
+    generate_research_briefs_docx(
+        project_name=project_name,
+        briefs=[{
+            "question": b.question,
+            "output_json": b.output_json,
+            "cost_usd": b.cost_usd,
+            "created_at": b.created_at.strftime("%b %d, %Y %H:%M") if b.created_at else "",
+        } for b in briefs],
+        output_path=output_path,
+    )
+
+    doc_record = OutputDocument(
+        project_id=project_id,
+        doc_type="research_briefs",
+        file_path=output_path,
+        file_name=filename,
+    )
+    db.add(doc_record)
+    db.commit()
+
+    return FileResponse(
+        path=output_path,
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )

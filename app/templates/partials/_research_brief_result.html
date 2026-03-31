@@ -139,8 +139,12 @@
     </details>
     {% endif %}
 
-    {# ── Save to Bible ─────────────────────────────────────────── #}
-    <div style="padding-top: 0.75rem; border-top: 1px solid var(--border); display: flex; gap: 0.75rem; align-items: center;">
+    {# ── Actions: Export + Save to Bible ─────────────────────── #}
+    <div style="padding-top: 0.75rem; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center;">
+        <form action="/projects/{{ project_id }}/research-briefs/{{ brief.id }}/export-docx"
+              method="post" style="display: inline; margin: 0;">
+            <button type="submit" class="btn btn-outline btn-sm">Export DOCX</button>
+        </form>
         <form hx-post="/api/projects/{{ project_id }}/research-briefs/{{ brief.id }}/save-to-bible"
               hx-target="#save-result-{{ brief.id }}"
               hx-swap="innerHTML"
