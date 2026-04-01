@@ -286,8 +286,8 @@
 </div>
 
 <!-- Edit Modal -->
-<div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100;">
-    <div style="max-width: 600px; margin: 5rem auto;" class="card">
+<div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 100; overflow-y: auto;">
+    <div style="max-width: 640px; margin: 3rem auto;" class="card">
         <h2>Edit Project</h2>
         <form action="/projects/{{ project.id }}/update" method="post">
             <div class="form-group">
@@ -300,8 +300,25 @@
             </div>
             <div class="form-group">
                 <label>Raw Product Data</label>
-                <textarea name="raw_data" style="min-height: 200px;">{{ project.raw_data or '' }}</textarea>
+                <textarea name="raw_data" id="edit-raw-data" style="min-height: 200px;">{{ project.raw_data or '' }}</textarea>
             </div>
+
+            {# ── File upload — appends extracted text to raw_data ── #}
+            <div class="form-group">
+                <label>Upload Additional Files <span class="text-dim text-sm">(PDF, DOCX, TXT — text will be appended to Raw Product Data)</span></label>
+                <div id="edit-drop-zone"
+                     style="border: 2px dashed var(--border); border-radius: 6px; padding: 1.25rem; text-align: center; cursor: pointer; transition: border-color 0.2s;"
+                     ondragover="event.preventDefault(); this.style.borderColor='var(--accent)';"
+                     ondragleave="this.style.borderColor='var(--border)';"
+                     ondrop="handleEditDrop(event);"
+                     onclick="document.getElementById('edit-file-input').click()">
+                    <p class="text-sm text-dim" id="edit-drop-label">Drop files here or click to browse</p>
+                    <input type="file" id="edit-file-input" multiple accept=".pdf,.docx,.doc,.txt"
+                           style="display:none" onchange="handleEditFiles(this.files)">
+                </div>
+                <div id="edit-file-status" style="margin-top: 0.5rem;"></div>
+            </div>
+
             <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
                 <button type="button" class="btn btn-outline" onclick="document.getElementById('edit-modal').style.display='none'">Cancel</button>
                 <button type="submit" class="btn btn-primary">Save</button>
@@ -309,4 +326,43 @@
         </form>
     </div>
 </div>
+
+<script>
+function handleEditDrop(e) {
+    e.preventDefault();
+    document.getElementById('edit-drop-zone').style.borderColor = 'var(--border)';
+    handleEditFiles(e.dataTransfer.files);
+}
+
+function handleEditFiles(files) {
+    if (!files || files.length === 0) return;
+    var statusEl = document.getElementById('edit-file-status');
+    var labelEl  = document.getElementById('edit-drop-label');
+    var rawDataEl = document.getElementById('edit-raw-data');
+
+    var fileList = Array.from(files).map(function(f) { return f.name; }).join(', ');
+    labelEl.textContent = 'Parsing: ' + fileList + '...';
+    statusEl.innerHTML = '<p class="text-sm text-dim">Extracting text, please wait...</p>';
+
+    var formData = new FormData();
+    Array.from(files).forEach(function(f) { formData.append('files', f); });
+
+    fetch('/api/parse-files', { method: 'POST', body: formData })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var extracted = data.raw_text || '';
+            if (extracted.trim()) {
+                rawDataEl.value = rawDataEl.value + '\n\n' + extracted;
+                statusEl.innerHTML = '<p class="text-sm" style="color:var(--accent);">✓ ' + files.length + ' file(s) parsed and appended. Review below, then Save.</p>';
+            } else {
+                statusEl.innerHTML = '<p class="text-sm" style="color:var(--red);">Could not extract text from those files.</p>';
+            }
+            labelEl.textContent = 'Drop files here or click to browse';
+        })
+        .catch(function() {
+            statusEl.innerHTML = '<p class="text-sm" style="color:var(--red);">Parse error — try again.</p>';
+            labelEl.textContent = 'Drop files here or click to browse';
+        });
+}
+</script>
 {% endblock %}
