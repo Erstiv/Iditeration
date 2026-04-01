@@ -114,6 +114,14 @@ SKIP_KEYS = {
 }
 
 
+def _safe_str(text) -> str:
+    """Strip NULL bytes and XML-illegal control characters from a string."""
+    import re
+    s = str(text)
+    # Remove NULL bytes and control chars (except tab, newline, carriage return)
+    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', s)
+
+
 def _humanize_key(key: str) -> str:
     """Convert camelCase or snake_case key to readable heading."""
     import re
@@ -135,25 +143,24 @@ def _render_value(doc, value, depth=2):
 
     if isinstance(value, str):
         if len(value) > 0:
-            doc.add_paragraph(value)
+            doc.add_paragraph(_safe_str(value))
 
     elif isinstance(value, bool):
-        doc.add_paragraph(str(value))
+        doc.add_paragraph(_safe_str(value))
 
     elif isinstance(value, (int, float)):
-        doc.add_paragraph(str(value))
+        doc.add_paragraph(_safe_str(value))
 
     elif isinstance(value, list):
         for item in value:
             if isinstance(item, str):
-                doc.add_paragraph(item, style="List Bullet")
+                doc.add_paragraph(_safe_str(item), style="List Bullet")
             elif isinstance(item, dict):
                 _render_dict(doc, item, depth=depth)
-                # Add small spacing between list items
             elif isinstance(item, list):
                 for sub in item:
                     if isinstance(sub, str):
-                        doc.add_paragraph(sub, style="List Bullet")
+                        doc.add_paragraph(_safe_str(sub), style="List Bullet")
                     else:
                         _render_value(doc, sub, depth=depth)
 
@@ -184,7 +191,7 @@ def _render_dict(doc, data: dict, depth=2):
         run = p.add_run(f"{label}: ")
         run.bold = True
         run.font.size = Pt(10)
-        p.add_run(str(v))
+        p.add_run(_safe_str(v))
 
     # Render complex values with headings
     heading_level = min(depth, 4)  # Cap at Heading 4
