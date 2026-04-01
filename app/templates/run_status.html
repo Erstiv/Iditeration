@@ -85,7 +85,7 @@
                           method="post" style="display:inline;margin:0;">
                         {% set char = AGENT_CHARACTERS.get(agent.name, {}) %}
                         <button type="submit" class="btn btn-outline btn-sm"
-                                onclick="return confirm('Rerun {{ char.name or agent.name.replace(\'_\', \' \') }}? This will replace their current output. Downstream agents will NOT be re-run.')">
+                                onclick="return confirm('Rerun this agent? This will replace their current output. Downstream agents will NOT be re-run.')">
                             Rerun
                         </button>
                     </form>
