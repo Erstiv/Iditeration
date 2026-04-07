@@ -93,14 +93,14 @@ def _add_page_numbers(doc: Document):
 
 # ─── Agent display order and section titles ────────────────
 AGENT_SECTIONS = [
-    ("chief_strategist", "1. Executive Summary & Grand Strategy"),
-    ("intake_analyst", "2. Product Assessment"),
-    ("behavioral_scientist", "3. Behavioral Framework"),
-    ("psychometrics_expert", "4. Audience Segmentation & Psychometrics"),
-    ("competitive_intelligence", "5. Competitive Landscape"),
-    ("social_strategist", "6. Social Media Strategy"),
-    ("creative_director", "7. Creative Brief & Campaign Deliverables"),
-    ("stakeholder_agent", "8. Stakeholder Interview Framework"),
+    ("chief_strategist", "Executive Summary & Grand Strategy"),
+    ("intake_analyst", "Product Assessment"),
+    ("behavioral_scientist", "Behavioral Framework"),
+    ("psychometrics_expert", "Audience Segmentation & Psychometrics"),
+    ("competitive_intelligence", "Competitive Landscape"),
+    ("social_strategist", "Social Media Strategy"),
+    ("creative_director", "Creative Brief & Campaign Deliverables"),
+    ("stakeholder_agent", "Stakeholder Interview Framework"),
 ]
 
 # Keys to skip (metadata, not content)
@@ -357,9 +357,11 @@ def generate_marketing_plan(
     toc_sections.append("Annotated Bibliography")
 
     for i, title_text in enumerate(toc_sections, 1):
-        p = doc.add_paragraph(f"{i}. {title_text}")
-        p.style = doc.styles["List Number"]
+        doc.add_paragraph(f"{i}. {title_text}")
     doc.add_page_break()
+
+    # Build numbered map so rendered sections match TOC numbering
+    _section_numbers = {t: i for i, t in enumerate(toc_sections, 1)}
 
     # ─── Helper: render stakeholder section ─────────────────
     def _render_stakeholder_section(heading: str):
@@ -443,12 +445,16 @@ def generate_marketing_plan(
         doc.add_page_break()
 
     # ─── Render sections ────────────────────────────────────
+    def _numbered(title: str) -> str:
+        n = _section_numbers.get(title)
+        return f"{n}. {title}" if n else title
+
     if has_any_questions and not has_any_answers:
-        _render_stakeholder_section("Stakeholder Interview Questions")
+        _render_stakeholder_section(_numbered("Stakeholder Interview Questions"))
 
     for agent_key, section_title in main_sections:
         agent_data = agent_outputs.get(agent_key, {})
-        doc.add_heading(section_title, level=1)
+        doc.add_heading(_numbered(section_title), level=1)
         if not agent_data:
             doc.add_paragraph("(No data from this agent.)")
         else:
@@ -457,12 +463,12 @@ def generate_marketing_plan(
         doc.add_page_break()
 
     if has_any_questions and has_any_answers:
-        _render_stakeholder_section("Stakeholder Interviews — Q&A Record")
+        _render_stakeholder_section(_numbered("Stakeholder Interviews — Q&A Record"))
 
     # ─── Annotated Bibliography ─────────────────────────────
     all_citations = _collect_all_citations(agent_outputs)
     if all_citations:
-        doc.add_heading("Annotated Bibliography", level=1)
+        doc.add_heading(_numbered("Annotated Bibliography"), level=1)
         _render_bibliography(doc, all_citations)
         doc.add_page_break()
 
