@@ -50,6 +50,26 @@ class ResearchAgent(BaseAgent):
         )
         return "\n\n".join(sections)
 
+    def _gemini_with_retry(self, contents, config_kwargs, label="call", max_retries=4):
+        """Make a Gemini API call with exponential backoff on 503/429."""
+        import time as _time
+        for attempt in range(max_retries + 1):
+            try:
+                return self.client.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=types.GenerateContentConfig(**config_kwargs),
+                )
+            except Exception as e:
+                err = str(e).lower()
+                retryable = any(k in err for k in ("503", "429", "unavailable", "rate", "quota", "high demand", "resource_exhausted"))
+                if retryable and attempt < max_retries:
+                    wait = 2 ** attempt * 5
+                    logger.warning(f"Research Agent {label}: attempt {attempt+1} hit {type(e).__name__}, retrying in {wait}s...")
+                    _time.sleep(wait)
+                else:
+                    raise
+
     def _call_gemini(self, prompt: str) -> object:
         """Override to use Google Search grounding for research.
 
@@ -61,15 +81,15 @@ class ResearchAgent(BaseAgent):
         logger.info("Research Agent: Step 1 — Searching with Google grounding...")
         search_tool = types.Tool(google_search=types.GoogleSearch())
 
-        search_response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
+        search_response = self._gemini_with_retry(
+            prompt,
+            dict(
                 system_instruction=self.system_prompt,
                 temperature=AGENT_TEMPERATURE,
                 max_output_tokens=AGENT_MAX_TOKENS,
                 tools=[search_tool],
             ),
+            label="Step 1 (search)",
         )
 
         # Extract the raw research text — handle None/empty responses
@@ -131,10 +151,9 @@ class ResearchAgent(BaseAgent):
             "Return ONLY valid JSON. No markdown, no explanation."
         )
 
-        synthesis_response = self.client.models.generate_content(
-            model=self.model,
-            contents=synthesis_prompt,
-            config=types.GenerateContentConfig(
+        synthesis_response = self._gemini_with_retry(
+            synthesis_prompt,
+            dict(
                 system_instruction=(
                     "You are a research synthesizer. Take raw research findings and "
                     "organize them into a clean, structured JSON format. Be thorough "
@@ -145,6 +164,7 @@ class ResearchAgent(BaseAgent):
                 max_output_tokens=AGENT_MAX_TOKENS,
                 response_mime_type="application/json",
             ),
+            label="Step 2 (synthesis)",
         )
 
         # Track tokens from both calls
