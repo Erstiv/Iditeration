@@ -43,7 +43,29 @@ Your work turns vague audience descriptions ("millennials who like action shows"
 4. **Marketing Bible**: General segmentation frameworks
 5. **Product Bible**: Accumulated product data
 
-## YOUR TASK
+## YOUR TASK — TWO PHASES WITH A REVIEW BOUNDARY
+
+The human reviewer wants raw research reviewable BEFORE synthesis, so segment claims built on fake citations don't silently propagate. Produce Phase 1 (research questions + sources) first, then Phase 2 (segmentation + personas + matrix) built on it.
+
+### PHASE 1 — PSYCHOMETRIC RESEARCH QUESTIONS
+
+Derive 4–6 research questions grounded in the product brief. Examples: "Which OCEAN profiles over-index on serialized faith-adjacent fantasy?", "What psychographic traits predict sharing of family-friendly AVOD content?", "How does regulatory focus interact with devotional content consumption?"
+
+For EACH question, produce:
+
+1. **`question`** — the specific research question.
+2. **`data_points`** — 3–6 findings, each with `finding`, `framework_basis` (e.g. "Big Five", "VALS", "Schwartz"), `evidence_strength`, `source_ref`.
+3. **`summary`** — integrate the findings into one answer.
+4. **`application`** — how this specifically applies to THIS product's audience segmentation.
+5. **`caveats_and_limitations`** — where the frameworks disagree, where evidence is weak, where generalization is risky (cross-cultural validity, WEIRD sampling, etc.).
+6. **`marketing_implication`** — the concrete segmentation / targeting move that follows.
+7. **`question_sources`** — array of `article_title` strings for this question.
+
+Aim for **10+ total sources** across the Phase 1 block. Cite the foundational psychometric instruments (NEO-PI-R / BFI, VALS, Schwartz PVQ, MFQ-30, Need for Cognition Scale, Regulatory Focus Questionnaire) when you're leaning on them. Be honest about instrument validity issues.
+
+### PHASE 2 — SEGMENTATION + PERSONAS
+
+Build the Phase 2 output from the verified Phase 1 research. At the top, include a `phase_2_disclaimer` noting the synthesis is only as sound as the verified sources.
 
 ### Part 1: Psychometric Audience Map
 For each audience segment identified by the Intake Analyst (and any new segments you identify), build a full psychometric profile:
@@ -123,6 +145,35 @@ Return valid JSON matching the schema. Psychometric scores should be specific (e
 PSYCHOMETRICS_EXPERT_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
+        # ── Phase 1: Psychometric research ────────────────────────
+        "research_questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "data_points": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "finding": {"type": "string"},
+                                "framework_basis": {"type": "string"},
+                                "evidence_strength": {"type": "string", "enum": ["established", "strong", "moderate", "emerging"]},
+                                "source_ref": {"type": "string"}
+                            }
+                        }
+                    },
+                    "summary": {"type": "string"},
+                    "application": {"type": "string"},
+                    "caveats_and_limitations": {"type": "string"},
+                    "marketing_implication": {"type": "string"},
+                    "question_sources": {"type": "array", "items": {"type": "string"}}
+                }
+            }
+        },
+        "phase_2_disclaimer": {"type": "string"},
+        # ── Phase 2: Segmentation ─────────────────────────────────
         "audience_segments": {
             "type": "array",
             "items": {

@@ -111,6 +111,8 @@ SKIP_KEYS = {
     "preparedBy", "prepared_by", "version", "grandStrategyTitle",
     "behavioralScientist", "missing_information_alert",
     "sources_cited", "sources",  # rendered in bibliography section
+    "research_questions",        # rendered separately via _render_research_questions
+    "phase_2_disclaimer",        # rendered separately as an advisory callout
 }
 
 
@@ -235,49 +237,244 @@ def _collect_all_citations(agent_outputs: dict) -> list[dict]:
 
 
 def _render_bibliography(doc, citations: list[dict]):
-    """Render annotated bibliography entries into the DOCX."""
-    for i, cite in enumerate(citations, 1):
-        title = cite.get("title", "Untitled Source")
-        url = cite.get("url", "")
-        description = cite.get("description", "")
-        finding = cite.get("finding", "")
+    """Render annotated bibliography entries into the DOCX.
 
-        # Title line
+    Updated 2026-04-15 to surface the fields the human reviewer needs to
+    verify a citation: authors, article title, publication, year, URL,
+    MLA line, and a confidence signal flagging fabrication risk.
+    """
+    # Confidence colors — the user should see at a glance which citations to trust.
+    CONF_COLOR = {
+        "verified":          RGBColor(0x27, 0xAE, 0x60),  # green
+        "likely":            RGBColor(0xF3, 0x9C, 0x12),  # amber — verify before quoting
+        "general-consensus": RGBColor(0x88, 0x88, 0x88),  # gray — not a specific paper
+    }
+
+    for i, cite in enumerate(citations, 1):
+        # Prefer new fields; fall back to legacy (`title`) for older runs.
+        article_title = cite.get("article_title") or cite.get("title") or "Untitled Source"
+        authors       = cite.get("authors", "")
+        publication   = cite.get("publication") or cite.get("journal", "")
+        year          = cite.get("year", "")
+        url           = cite.get("url", "")
+        doi           = cite.get("doi", "")
+        citation_mla  = cite.get("citation_mla", "")
+        description   = cite.get("description", "")
+        finding       = cite.get("finding", "")
+        relevance     = cite.get("relevance", "")
+        source_type   = cite.get("source_type", "")
+        confidence    = cite.get("confidence", "")
+
+        # Line 1: bold title (article title is the key verifiable field)
         p = doc.add_paragraph()
-        run = p.add_run(f"[{i}] {title}")
+        run = p.add_run(f"[{i}] {article_title}")
         run.bold = True
         run.font.size = Pt(10)
 
-        # URL
+        # Confidence tag inline with the title — the user's first honesty signal.
+        if confidence:
+            tag = p.add_run(f"   [{confidence.upper()}]")
+            tag.font.size = Pt(8)
+            tag.bold = True
+            tag.font.color.rgb = CONF_COLOR.get(confidence, RGBColor(0x88, 0x88, 0x88))
+
+        # Line 2: authors + publication + year (the verifiable trio)
+        byline_parts = []
+        if authors:
+            byline_parts.append(authors)
+        if publication:
+            byline_parts.append(publication)
+        if year:
+            byline_parts.append(str(year))
+        if source_type:
+            byline_parts.append(source_type)
+        if byline_parts:
+            p_by = doc.add_paragraph()
+            run_by = p_by.add_run(" · ".join(byline_parts))
+            run_by.font.size = Pt(9)
+            run_by.italic = True
+            run_by.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+        # Line 3: MLA line the user can copy-paste straight into a bibliography.
+        if citation_mla:
+            p_mla = doc.add_paragraph()
+            lbl = p_mla.add_run("MLA: ")
+            lbl.bold = True
+            lbl.font.size = Pt(9)
+            lbl.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+            body = p_mla.add_run(citation_mla)
+            body.font.size = Pt(9)
+
+        # URL — shown as plain text (python-docx does not natively render
+        # clickable hyperlinks without more plumbing, but the URL is still
+        # copy-pasteable and visually distinct).
         if url and url != "N/A":
             p_url = doc.add_paragraph()
             run_url = p_url.add_run(url)
             run_url.font.size = Pt(8)
             run_url.font.color.rgb = RGBColor(0x33, 0x66, 0x99)
+            run_url.underline = True
 
-        # Description
-        if description:
-            p_desc = doc.add_paragraph()
-            label = p_desc.add_run("Contains: ")
-            label.italic = True
-            label.font.size = Pt(9)
-            label.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
-            body = p_desc.add_run(description)
-            body.font.size = Pt(9)
+        if doi:
+            p_doi = doc.add_paragraph()
+            run_doi = p_doi.add_run(f"DOI: {doi}")
+            run_doi.font.size = Pt(8)
+            run_doi.font.color.rgb = RGBColor(0x33, 0x66, 0x99)
 
-        # Finding
-        if finding:
-            p_find = doc.add_paragraph()
-            label = p_find.add_run("Key finding: ")
-            label.italic = True
-            label.font.size = Pt(9)
-            label.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
-            body = p_find.add_run(finding)
-            body.font.size = Pt(9)
+        # Description / finding / relevance — the contextual block.
+        for label, body_text in [("Contains", description), ("Key finding", finding), ("Relevance", relevance)]:
+            if body_text:
+                p_x = doc.add_paragraph()
+                lbl = p_x.add_run(f"{label}: ")
+                lbl.italic = True
+                lbl.font.size = Pt(9)
+                lbl.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+                body = p_x.add_run(_safe_str(body_text))
+                body.font.size = Pt(9)
 
         # Spacing between entries
         if i < len(citations):
             doc.add_paragraph("")
+
+
+def _render_phase_2_disclaimer(doc, disclaimer_text: str):
+    """Visually-distinct callout separating Phase 1 research from Phase 2 synthesis."""
+    if not disclaimer_text:
+        disclaimer_text = (
+            "The synthesis that follows (framework, tactics, segments, recommendations) is only "
+            "as sound as the Phase 1 research and citations above. Verify those first — especially "
+            "any citation marked [LIKELY] or [GENERAL-CONSENSUS] — before relying on the strategic "
+            "conclusions drawn from them."
+        )
+    doc.add_paragraph("")
+    p = doc.add_paragraph()
+    lbl = p.add_run("⚠ Phase 1 → Phase 2 handoff. ")
+    lbl.bold = True
+    lbl.font.size = Pt(10)
+    lbl.font.color.rgb = RGBColor(0xC0, 0x39, 0x2B)
+    body = p.add_run(_safe_str(disclaimer_text))
+    body.font.size = Pt(10)
+    body.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+    body.italic = True
+    doc.add_paragraph("")
+
+
+def _render_review_advisory(doc):
+    """Top-of-document advisory explaining the two-phase verification workflow.
+
+    Added 2026-04-15 in response to human-in-loop feedback. Readers should know
+    up front that citations must be verified before the synthesis layer is trusted.
+    """
+    doc.add_heading("How to read this report", level=2)
+    advisory = (
+        "This report is produced in two phases. Phase 1 is research: sources, findings, and "
+        "direct answers to specific research questions. Phase 2 is synthesis: the strategic "
+        "framework, tactics, and recommendations that follow from that research.\n\n"
+        "Before trusting Phase 2, spot-check Phase 1. Every citation carries a confidence tag:\n"
+        "  • VERIFIED — the paper exists exactly as cited; safe to rely on.\n"
+        "  • LIKELY — the authors and topic are real; the title may be paraphrased. Search authors + topic to find the real paper.\n"
+        "  • GENERAL-CONSENSUS — no specific paper; field-level finding. Treat as opinion informed by the field.\n\n"
+        "If any citation cannot be found via its MLA line or URL, flag the whole section — the "
+        "synthesis built on it is suspect. This is not a weakness of this tool; it is the "
+        "two-phase workflow working as intended."
+    )
+    for paragraph in advisory.split("\n\n"):
+        p = doc.add_paragraph()
+        r = p.add_run(paragraph)
+        r.font.size = Pt(10)
+        r.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    doc.add_paragraph("")
+
+
+def _render_research_questions(doc, questions: list[dict]):
+    """Render the Wayfinders-style per-question research block.
+
+    Each question gets: question → data points → summary → application →
+    caveats → marketing implication → per-question source list.
+    The human reviewer asked for this format explicitly — they want to see
+    each question answered with its sources attached, not a single giant
+    bibliography at the end.
+    """
+    if not questions:
+        return
+
+    doc.add_heading("Research Questions & Findings", level=2)
+
+    intro = doc.add_paragraph()
+    intro_run = intro.add_run(
+        "Each research question below is answered with multiple data points, a summary, "
+        "application to this product, caveats, a marketing implication, and its own source list. "
+        "Verify the sources at the end of each question before trusting the synthesis that follows."
+    )
+    intro_run.italic = True
+    intro_run.font.size = Pt(10)
+    intro_run.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
+
+    for i, q in enumerate(questions, 1):
+        # Question heading
+        question = q.get("question", "Untitled question")
+        doc.add_heading(f"Q{i}. {question}", level=3)
+
+        # Data points
+        data_points = q.get("data_points") or []
+        if data_points:
+            dp_lbl = doc.add_paragraph()
+            r = dp_lbl.add_run("Data points")
+            r.bold = True
+            r.font.size = Pt(10)
+
+            for dp in data_points:
+                finding = dp.get("finding", "")
+                mechanism = dp.get("mechanism") or dp.get("framework_basis", "")
+                strength = dp.get("evidence_strength", "")
+                source_ref = dp.get("source_ref", "")
+
+                p = doc.add_paragraph(style="List Bullet")
+                run = p.add_run(_safe_str(finding))
+                run.font.size = Pt(10)
+
+                meta_bits = []
+                if mechanism:
+                    meta_bits.append(f"Mechanism: {mechanism}")
+                if strength:
+                    meta_bits.append(f"Evidence: {strength}")
+                if source_ref:
+                    meta_bits.append(f"Source: {source_ref}")
+                if meta_bits:
+                    meta_run = p.add_run(f"  ({' · '.join(meta_bits)})")
+                    meta_run.font.size = Pt(8)
+                    meta_run.italic = True
+                    meta_run.font.color.rgb = RGBColor(0x77, 0x77, 0x77)
+
+        # Summary / application / caveats / marketing implication
+        for label, key in [
+            ("Summary", "summary"),
+            ("Application to this product", "application"),
+            ("Caveats & limitations", "caveats_and_limitations"),
+            ("Marketing implication", "marketing_implication"),
+        ]:
+            val = q.get(key)
+            if val:
+                p = doc.add_paragraph()
+                lbl = p.add_run(f"{label}: ")
+                lbl.bold = True
+                lbl.font.size = Pt(10)
+                body = p.add_run(_safe_str(val))
+                body.font.size = Pt(10)
+
+        # Per-question source list
+        qs = q.get("question_sources") or []
+        if qs:
+            p = doc.add_paragraph()
+            lbl = p.add_run("Sources for this question: ")
+            lbl.bold = True
+            lbl.font.size = Pt(9)
+            lbl.font.color.rgb = RGBColor(0x33, 0x66, 0x99)
+            body = p.add_run("; ".join(_safe_str(s) for s in qs))
+            body.font.size = Pt(9)
+            body.font.color.rgb = RGBColor(0x33, 0x66, 0x99)
+
+        doc.add_paragraph("")
 
 
 def generate_marketing_plan(
@@ -358,6 +555,13 @@ def generate_marketing_plan(
 
     for i, title_text in enumerate(toc_sections, 1):
         doc.add_paragraph(f"{i}. {title_text}")
+    doc.add_page_break()
+
+    # ─── Review advisory (how to read this report) ──────────
+    # Added 2026-04-15: tells the reader about the two-phase verify-then-trust flow
+    # and the citation confidence tags. User feedback: they need to know up front
+    # that they should verify sources before relying on synthesis.
+    _render_review_advisory(doc)
     doc.add_page_break()
 
     # Build numbered map so rendered sections match TOC numbering
@@ -458,6 +662,16 @@ def generate_marketing_plan(
         if not agent_data:
             doc.add_paragraph("(No data from this agent.)")
         else:
+            # Phase 1: per-question research block (new, preferred reading order)
+            research_questions = agent_data.get("research_questions") or []
+            if research_questions:
+                _render_research_questions(doc, research_questions)
+
+            # Phase 1 → Phase 2 handoff callout
+            if research_questions or agent_data.get("phase_2_disclaimer"):
+                _render_phase_2_disclaimer(doc, agent_data.get("phase_2_disclaimer", ""))
+
+            # Phase 2: everything else (framework, tactics, segments, etc.)
             filtered = {k: v for k, v in agent_data.items() if k not in SKIP_KEYS and v}
             _render_dict(doc, filtered, depth=2)
         doc.add_page_break()
@@ -514,10 +728,17 @@ def generate_single_agent_docx(
 
     doc.add_paragraph("")
 
+    # Phase 1: per-question research block
+    research_questions = agent_output.get("research_questions") or []
+    if research_questions:
+        _render_research_questions(doc, research_questions)
+    if research_questions or agent_output.get("phase_2_disclaimer"):
+        _render_phase_2_disclaimer(doc, agent_output.get("phase_2_disclaimer", ""))
+
     filtered = {k: v for k, v in agent_output.items() if k not in SKIP_KEYS and v}
     if filtered:
         _render_dict(doc, filtered, depth=2)
-    else:
+    elif not research_questions:
         doc.add_paragraph("(No data from this agent.)")
 
     # ─── Bibliography for this agent ────────────────────────

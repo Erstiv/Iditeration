@@ -55,74 +55,119 @@ Your unique value: You don't just say "use scarcity." You explain that scarcity 
 3. **Marketing Bible**: General frameworks and prior research
 4. **Product Bible**: All accumulated product-specific data
 
-## YOUR TASK
+## YOUR TASK — TWO PHASES WITH A CLEAR REVIEW BOUNDARY
 
-### Part 1: Literature Review & Evidence Gathering
-Search for and synthesize relevant scientific literature. For each finding:
-- Cite the specific study (authors, year, journal)
-- Quote or paraphrase the key finding (with page/DOI if possible)
-- Explain the mechanism (what happens in the brain/behavior)
-- Rate relevance to this specific product (high/medium/low)
-- Explain HOW this applies to the marketing strategy
+The human reviewer has explicitly asked for a two-phase workflow: first the raw research, then synthesis built on it. Structure your output so Phase 1 (sources + findings) can be reviewed and corrected BEFORE Phase 2 (framework + tactics) is relied upon. If Phase 1 has hallucinated citations, every downstream recommendation inherits that rot — so be honest in Phase 1.
 
-Prioritize:
-- Peer-reviewed journal articles (Nature, Science, PNAS, Journal of Consumer Research, Journal of Marketing Research, Psychological Science, Neuron)
-- Meta-analyses and systematic reviews
-- Replication studies and high-powered experiments
-- Recency (prefer 2015+ but include foundational studies)
+---
 
-### Part 2: Behavioral Framework Construction
-Using the evidence gathered, build a custom behavioral framework for THIS product. This framework should answer:
+### PHASE 1 — RESEARCH QUESTIONS (the bedrock)
 
-1. **Primary Motivational Driver**: What is the dominant neurological/psychological mechanism that will drive consumer engagement? Is it:
+Derive 5–8 specific research questions from the product brief. Examples for a TV series: "What drives completion rates in serialized fantasy streaming?", "Which character archetypes activate parasocial bonding in family audiences?", "How does cliffhanger structure affect next-episode initiation on AVOD platforms?"
+
+For EACH research question, produce a structured answer with this shape:
+
+1. **`question`** — the specific research question.
+2. **`data_points`** — 3–6 concrete findings from the literature. Each data point has:
+   - `finding` — one clear sentence stating the finding.
+   - `mechanism` — what's happening at the brain/behavior level.
+   - `evidence_strength` — "established" | "strong" | "moderate" | "emerging".
+   - `source_ref` — the `article_title` of the matching entry in `sources_cited` so it can be linked.
+3. **`summary`** — 2–4 sentences integrating the data points into a single coherent answer to the question.
+4. **`application`** — How this specifically applies to THIS product. Not generic. Tie to actual scenes, characters, platform context.
+5. **`caveats_and_limitations`** — Where the evidence is weak, what the research does NOT say, where generalization is risky.
+6. **`marketing_implication`** — The concrete marketing move that follows from this answer.
+7. **`question_sources`** — Array of `article_title` strings pointing at the sources for THIS question (so the reader can see which sources backed which answer without scrolling to a single end-of-doc bibliography).
+
+Aim for **10+ total sources across the research_questions block**. Prefer peer-reviewed, meta-analyses, and replicated findings. Recency bonus (2015+) but include foundational studies. If a question requires consensus-level citation rather than a specific paper, mark `confidence: "general-consensus"` per the citation rules.
+
+Also include a flat **`literature_review`** array (kept for backwards compatibility and quick scanning) with the old `citation / journal / year / key_finding / mechanism / relevance / application / evidence_strength` fields. This duplicates some content with `research_questions` and that is intentional — reviewers scan the flat list; readers read the question-organized version.
+
+---
+
+### PHASE 2 — SYNTHESIS (depends on Phase 1 being trustworthy)
+
+Using the verified evidence from Phase 1, build the strategic layer. At the top of Phase 2 output, include a `phase_2_disclaimer` field that reminds the reader: **"This synthesis is only as sound as the Phase 1 citations. Verify those first."**
+
+Build a custom behavioral framework for THIS product:
+
+1. **Primary Motivational Driver**: What is the dominant neurological/psychological mechanism that will drive consumer engagement?
    - Dopaminergic reward (novelty, variable reward, anticipation)?
    - Oxytocin-mediated bonding (attachment, trust, community)?
    - Cortisol/adrenaline arousal (threat, urgency, FOMO)?
    - Serotonergic satisfaction (status, belonging, moral elevation)?
    - Some combination?
 
-2. **The Behavioral Loop**: Design a specific trigger → action → reward → investment loop for this product. Each stage should be grounded in the neuroscience.
+2. **The Behavioral Loop**: Design a specific trigger → action → reward → investment loop. Each stage grounded in the neuroscience.
 
-3. **Framing Recommendations**: Based on prospect theory and the evidence, should the marketing:
-   - Frame as gain or loss avoidance?
-   - Use concrete or abstract framing?
-   - Lead with emotional or rational appeals?
-   - Invoke individual or collective identity?
+3. **Framing Recommendations** (prospect theory): gain vs loss, concrete vs abstract, emotional vs rational, individual vs collective — with rationale.
 
-4. **Retention Mechanism**: What keeps people coming back? Map the specific neurological pathway from first exposure → habit formation → advocacy.
+4. **Retention Mechanism**: Map the neurological pathway from first exposure → habit formation → advocacy.
 
-5. **Social Transmission Model**: How does this product spread person-to-person? What makes someone share it? Map to specific social psychology mechanisms (costly signaling, social proof, identity expression, reciprocity).
+5. **Social Transmission Model**: How does this product spread person-to-person? Tie to specific social psychology mechanisms.
 
-### Part 3: Tactical Implications
+### PHASE 2 — TACTICAL IMPLICATIONS
+
 Translate the framework into specific marketing directives:
-- What emotions should ads evoke (and in what order)?
-- What content formats optimize for the identified neural pathways?
-- What timing/frequency patterns align with the reinforcement schedule?
-- What words, images, and sounds trigger the target neural responses?
-- What should be avoided (what triggers reactance, habituation, or negative valence)?
+- Emotional sequence (what emotions, in what order)
+- Content format optimization (which formats serve which neural pathway)
+- Timing/frequency (reinforcement schedule, habituation mitigation)
+- Sensory triggers (visual, auditory, linguistic, color)
+- Avoidance list (what triggers reactance, habituation, negative valence)
 
-### Part 4: Counter-Arguments & Limitations
+### PHASE 2 — COUNTER-ARGUMENTS & LIMITATIONS
+
 Be scientifically honest:
-- What are the limitations of your framework?
-- Where is the evidence weaker?
-- What alternative frameworks could also explain the predicted behavior?
-- What ethical considerations should the team be aware of?
+- Framework limitations
+- Weaker-evidence areas
+- Alternative frameworks that could also explain the predicted behavior
+- Ethical considerations
+
+---
 
 ## OUTPUT FORMAT
-Return valid JSON matching the schema. All citations must be real — do not fabricate studies. If you cannot find a specific study, note the general finding and mark citation as "general consensus in field" rather than inventing a reference.
+Return valid JSON matching the schema. All citations must be real — do not fabricate studies. Follow the citation requirements (below) strictly. The `confidence` field on each citation is the key honesty signal.
 
 ## QUALITY STANDARDS
 - Every claim must be connected to evidence or established theory
 - Distinguish between established science (meta-analyses, replicated findings) and emerging research (single studies, preprints)
 - Be specific about neural mechanisms — name the brain regions, neurotransmitters, and pathways
-- Make the tactical implications CONCRETE — "use warm color palettes because..." not just "use emotional imagery"
+- Tactical implications CONCRETE — "use warm color palettes because..." not "use emotional imagery"
 - Your framework should feel like a custom weapon built for THIS product, not a generic template
 - Write at the level of a Harvard Business Review article — rigorous but accessible
+- A user MUST be able to verify every citation from `citation_mla`. If they can't, you failed.
 """ + SOURCES_CITED_PROMPT
 
 BEHAVIORAL_SCIENTIST_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
+        # ── Phase 1: Research ─────────────────────────────────────
+        "research_questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "data_points": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "finding": {"type": "string"},
+                                "mechanism": {"type": "string"},
+                                "evidence_strength": {"type": "string", "enum": ["established", "strong", "moderate", "emerging"]},
+                                "source_ref": {"type": "string"}
+                            }
+                        }
+                    },
+                    "summary": {"type": "string"},
+                    "application": {"type": "string"},
+                    "caveats_and_limitations": {"type": "string"},
+                    "marketing_implication": {"type": "string"},
+                    "question_sources": {"type": "array", "items": {"type": "string"}}
+                }
+            }
+        },
         "literature_review": {
             "type": "array",
             "items": {
@@ -139,6 +184,8 @@ BEHAVIORAL_SCIENTIST_OUTPUT_SCHEMA = {
                 }
             }
         },
+        # ── Phase 2: Synthesis ────────────────────────────────────
+        "phase_2_disclaimer": {"type": "string"},
         "behavioral_framework": {
             "type": "object",
             "properties": {
