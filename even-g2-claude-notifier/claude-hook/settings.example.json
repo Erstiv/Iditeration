@@ -1,0 +1,40 @@
+{
+  "//": "Merge this into ~/.claude/settings.json (or .claude/settings.json in a project).",
+  "//hooks": "Notification fires when Claude needs input/permission; Stop when it finishes a response; SessionEnd when the session closes. Adjust the absolute path to notify_glasses.py.",
+  "env": {
+    "GLASSES_RELAY_URL": "https://relay.example.com",
+    "GLASSES_RELAY_TOKEN": "change-me-to-match-relay"
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/even-g2-claude-notifier/claude-hook/notify_glasses.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/even-g2-claude-notifier/claude-hook/notify_glasses.py"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /absolute/path/to/even-g2-claude-notifier/claude-hook/notify_glasses.py"
+          }
+        ]
+      }
+    ]
+  }
+}

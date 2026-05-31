@@ -1,0 +1,13 @@
+{
+  "name": "Claude Notifier",
+  "id": "com.example.claude-notifier",
+  "version": "0.1.0",
+  "description": "Shows Claude Code session events (needs-input / done) on the G2 HUD.",
+  "entry": "index.html",
+  "permissions": [],
+  "//network": "MUST list the relay origin or the WebView's fetch/WebSocket is blocked Even-side. Use wss:// for the WebSocket origin too. Replace with your real relay host.",
+  "network": [
+    "https://relay.example.com",
+    "wss://relay.example.com"
+  ]
+}
